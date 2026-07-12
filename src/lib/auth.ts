@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { ensureCaregiverSession, getSession, supabase, supabaseEnabled } from "./supabase";
+import {
+  completeAuthFromUrl,
+  getSession,
+  sendMagicLink,
+  supabase,
+  supabaseEnabled,
+  verifyEmailOtp
+} from "./supabase";
 
 export function useSafeZoneSession() {
   const [session, setSession] = useState<Session | null>(null);
@@ -17,19 +24,16 @@ export function useSafeZoneSession() {
 
     (async () => {
       try {
-        const next = await ensureCaregiverSession();
-        if (active) {
-          setSession(next);
-          setAuthError(null);
-        }
+        await completeAuthFromUrl();
       } catch (caught) {
         if (active) {
-          const existing = await getSession().catch(() => null);
-          setSession(existing);
-          setAuthError(
-            caught instanceof Error ? caught.message : "SafeZone could not start a secure caregiver session."
-          );
+          setAuthError(caught instanceof Error ? caught.message : "Sign-in link could not be completed.");
         }
+      }
+
+      try {
+        const value = await getSession();
+        if (active) setSession(value);
       } finally {
         if (active) setLoading(false);
       }
@@ -53,4 +57,12 @@ export function useSafeZoneSession() {
     authError,
     authenticated: !supabaseEnabled || Boolean(session)
   };
+}
+
+export async function requestCaregiverLogin(email: string) {
+  await sendMagicLink(email);
+}
+
+export async function verifyCaregiverLogin(email: string, token: string) {
+  await verifyEmailOtp(email, token);
 }

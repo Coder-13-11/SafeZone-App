@@ -88,24 +88,76 @@ export async function getUser(): Promise<User | null> {
   return session?.user || null;
 }
 
-export async function ensureCaregiverSession(): Promise<Session | null> {
-  const client = requireSupabase();
-  const existing = await getSession();
-  if (existing) return existing;
+function authRedirectTo() {
+  if (typeof window === "undefined") return `${publicUrl}/onboarding`;
+  const path = window.location.pathname.startsWith("/caregiver")
+    ? "/caregiver"
+    : "/onboarding";
+  return `${window.location.origin}${path}`;
+}
 
-  const { data, error } = await client.auth.signInAnonymously({
+export async function sendMagicLink(email: string) {
+  const client = requireSupabase();
+  const { error } = await client.auth.signInWithOtp({
+    email: email.trim(),
     options: {
-      data: { role: "caregiver" }
+      emailRedirectTo: authRedirectTo(),
+      shouldCreateUser: true
     }
   });
-  if (error) {
-    throw new Error(
-      error.message.toLowerCase().includes("anonymous")
-        ? "Enable Anonymous sign-ins in Supabase Auth settings, then reload SafeZone."
-        : error.message
-    );
+  if (error) throw error;
+}
+
+export async function verifyEmailOtp(email: string, token: string) {
+  const client = requireSupabase();
+  const { error } = await client.auth.verifyOtp({
+    email: email.trim(),
+    token: token.trim(),
+    type: "email"
+  });
+  if (error) throw error;
+}
+
+export async function completeAuthFromUrl() {
+  if (!supabase || typeof window === "undefined") return;
+
+  const url = new URL(window.location.href);
+  const authError =
+    url.searchParams.get("error_description") ||
+    url.searchParams.get("error") ||
+    url.hash.match(/error_description=([^&]+)/)?.[1] ||
+    url.hash.match(/error=([^&]+)/)?.[1];
+
+  if (authError) {
+    const cleaned = new URL(window.location.href);
+    cleaned.searchParams.delete("error");
+    cleaned.searchParams.delete("error_description");
+    cleaned.searchParams.delete("error_code");
+    window.history.replaceState({}, "", cleaned.pathname + cleaned.search);
+    throw new Error(decodeURIComponent(authError.replace(/\+/g, " ")));
   }
-  return data.session;
+
+  const code = url.searchParams.get("code");
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    url.searchParams.delete("code");
+    window.history.replaceState({}, "", url.pathname + url.search);
+    if (error) throw error;
+    return;
+  }
+
+  const tokenHash = url.searchParams.get("token_hash");
+  const otpType = url.searchParams.get("type");
+  if (tokenHash && otpType) {
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: otpType as "email" | "magiclink" | "signup" | "invite" | "recovery" | "email_change"
+    });
+    url.searchParams.delete("token_hash");
+    url.searchParams.delete("type");
+    window.history.replaceState({}, "", url.pathname + url.search);
+    if (error) throw error;
+  }
 }
 
 export async function signOut() {
