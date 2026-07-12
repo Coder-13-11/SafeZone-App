@@ -1,0 +1,29 @@
+{
+  "name": "SafeZone",
+  "short_name": "SafeZone",
+  "description": "A browser-based safety app for families caring for someone with dementia.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0d2426",
+  "theme_color": "#0d2426",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Family setup",
+      "url": "/onboarding"
+    },
+    {
+      "name": "Caregiver dashboard",
+      "url": "/"
+    }
+  ]
+}

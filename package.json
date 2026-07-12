@@ -1,0 +1,40 @@
+{
+  "name": "safezone",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm:server\" \"npm:client\"",
+    "client": "vite --host 0.0.0.0",
+    "server": "node server/server.mjs",
+    "start": "NODE_ENV=production node server/server.mjs",
+    "build": "tsc --noEmit && vite build",
+    "preview": "npm run build && npm start",
+    "vapid:generate": "node server/generate-vapid.mjs",
+    "supabase:schema": "supabase db push",
+    "supabase:functions": "supabase functions deploy create_pairing && supabase functions deploy claim_pairing && supabase functions deploy ingest_location && supabase functions deploy send_push"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.2",
+    "express": "latest",
+    "qrcode": "^1.5.4",
+    "web-push": "latest",
+    "ws": "latest"
+  },
+  "devDependencies": {
+    "@types/leaflet": "latest",
+    "@types/node": "latest",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@types/web-push": "latest",
+    "@types/ws": "latest",
+    "@vitejs/plugin-react": "latest",
+    "concurrently": "latest",
+    "leaflet": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  }
+}

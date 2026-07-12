@@ -1,0 +1,11 @@
+[functions.create_pairing]
+verify_jwt = true
+
+[functions.claim_pairing]
+verify_jwt = false
+
+[functions.ingest_location]
+verify_jwt = false
+
+[functions.send_push]
+verify_jwt = false
