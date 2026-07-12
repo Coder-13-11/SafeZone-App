@@ -66,23 +66,13 @@ Vercel build env vars are configured in `vercel.json`. Pushing to `main` redeplo
 ### Supabase one-time setup
 
 1. **SQL Editor** → run all of `supabase/schema.sql`
-2. **Authentication → URL Configuration**
+2. **Authentication → Providers → Anonymous**  
+   Turn **Anonymous Sign-Ins** on. SafeZone creates a quiet caregiver session automatically (no email/password).
+3. **Authentication → URL Configuration**
    - Site URL: `https://safe-zone-app.vercel.app`
-   - Redirect URLs (add all of these):
-     - `https://safe-zone-app.vercel.app/onboarding`
-     - `https://safe-zone-app.vercel.app/caregiver`
-     - `http://localhost:5173/onboarding`
-     - `http://localhost:5173/caregiver`
-3. **Authentication → Email Templates → Magic Link**  
-   Include the one-time code so sign-in works even when the email link opens in a different browser:
-
-```html
-<h2>Your SafeZone sign-in code</h2>
-<p>Enter this code in SafeZone:</p>
-<p style="font-size:24px;font-weight:700;letter-spacing:4px">{{ .Token }}</p>
-<p>Or open this link in the <strong>same browser</strong> where you requested sign-in:</p>
-<p><a href="{{ .ConfirmationURL }}">Sign in to SafeZone</a></p>
-```
+   - Redirect URLs (optional, for local/dev):
+     - `https://safe-zone-app.vercel.app/**`
+     - `http://localhost:5173/**`
 4. **Edge Functions → Secrets** (never commit `service_role` or `VAPID_PRIVATE_KEY`):
 
 ```bash

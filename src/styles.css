@@ -181,21 +181,6 @@ h1 {
   margin: 1rem 0 0;
 }
 
-.auth-secondary {
-  border: 1px solid var(--line);
-  border-radius: 0.9rem;
-  padding: 0.85rem 1rem;
-  color: var(--muted);
-  background: transparent;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.auth-secondary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .patient-card {
   width: min(720px, 100%);
   border: 1px solid var(--line);
