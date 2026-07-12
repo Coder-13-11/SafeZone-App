@@ -492,6 +492,10 @@ export function OnboardingFlow() {
                     <button type="button" className="secondary" onClick={async () => { await navigator.clipboard.writeText(pairingURL); setCopied(true); }}>{copied ? "Link copied" : "Copy pairing link"}</button>
                     <button type="button" className={pairingExpired ? "" : "secondary"} onClick={() => { setCopied(false); createPairing(household!.id); }}>{pairingExpired ? "Create a fresh code" : "Create a new code"}</button>
                   </div>
+                  <button type="button" className="onboarding-primary" onClick={finish}>
+                    Go to caregiver dashboard <span>→</span>
+                  </button>
+                  <p className="ios-onboarding-note">Skip pairing for now and open the dashboard. You can connect {patientName}’s phone later from Family.</p>
                   <button type="button" className="onboarding-back" onClick={() => { setError(null); setStep(2); }}>← Edit Home Zone</button>
                   <small className={`expiry-note ${pairingExpired ? "expired" : ""}`}>
                     {pairingExpired ? "This code has expired. Create a fresh code to continue." : `Code expires at ${pairingExpiresAt ? new Date(pairingExpiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "—"}`}

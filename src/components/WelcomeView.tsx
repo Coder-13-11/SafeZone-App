@@ -124,7 +124,7 @@ export function WelcomeView() {
           <a href="#how-it-works">How it works</a>
           <a href="#care-confidence">Care Confidence</a>
           <a href="#family">For families</a>
-          <a href="#questions">Questions</a>
+          <a href="/caregiver?demo=1">Dashboard</a>
         </div>
         <a href="/onboarding" className="story-nav-cta">Start tracking</a>
       </nav>
