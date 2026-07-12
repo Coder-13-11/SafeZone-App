@@ -351,13 +351,70 @@ export async function getPairingStatus(householdId: string) {
   return { paired: Boolean(data.paired_at), pairedAt: data.paired_at as string | null };
 }
 
+async function sha256Hex(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function randomPairingToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function createPairingLocally(householdId: string) {
+  const client = requireSupabase();
+  const user = await getUser();
+  if (!user) throw new Error("Sign in before creating a pairing code.");
+
+  const token = randomPairingToken();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const { data, error } = await client
+    .from("pairing_sessions")
+    .insert({
+      household_id: householdId,
+      token_hash: await sha256Hex(token),
+      expires_at: expiresAt,
+      created_by: user.id
+    })
+    .select("id, expires_at")
+    .single();
+  if (error) throw error;
+
+  const url = new URL("/patient", publicUrl.endsWith("/") ? publicUrl.slice(0, -1) : publicUrl);
+  url.searchParams.set("household", householdId);
+  url.searchParams.set("pair", token);
+  return {
+    pairingId: data.id as string,
+    expiresAt: data.expires_at as string,
+    patientURL: url.toString()
+  };
+}
+
 export async function createPairing(householdId: string) {
   const client = requireSupabase();
-  const { data, error } = await client.functions.invoke("create_pairing", {
-    body: { householdId }
-  });
-  if (error) throw error;
-  return data as { pairingId: string; expiresAt: string; patientURL: string };
+  const invoked = await client.functions
+    .invoke("create_pairing", { body: { householdId } })
+    .catch(() => ({ data: null, error: { message: "Edge Function unavailable" } as Error }));
+
+  if (
+    !invoked.error &&
+    invoked.data &&
+    typeof invoked.data === "object" &&
+    "patientURL" in (invoked.data as Record<string, unknown>)
+  ) {
+    return invoked.data as { pairingId: string; expiresAt: string; patientURL: string };
+  }
+
+  try {
+    return await createPairingLocally(householdId);
+  } catch (caught) {
+    const detail = caught instanceof Error ? caught.message : "Could not create pairing code.";
+    throw new Error(
+      `${detail} If this keeps failing, run supabase/pairing_insert_policy.sql in the Supabase SQL Editor.`
+    );
+  }
 }
 
 export async function claimPairing(householdId: string, token: string) {
