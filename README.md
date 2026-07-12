@@ -14,16 +14,6 @@ npm install
 npm run dev
 ```
 
-Open:
-
-- Product entry: `http://localhost:5173`
-- Guided onboarding: `http://localhost:5173/onboarding`
-- Caregiver: `http://localhost:5173/caregiver`
-- Patient: `http://localhost:5173/patient`
-- Guided story: `http://localhost:5173/caregiver?demo=1`
-
-The guided story is explicitly labeled simulated movement. It sends a fixed demonstration path through the real backend geofence state machine so judges see safe, approaching, confirmation, alert, family response, and safe return states.
-
 ## Production build
 
 ```bash
