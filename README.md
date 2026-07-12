@@ -63,19 +63,12 @@ Vercel build env vars are configured in `vercel.json`. Pushing to `main` redeplo
      - `https://safe-zone-app.vercel.app/caregiver`
      - `http://localhost:5173/onboarding`
      - `http://localhost:5173/caregiver`
-3. **Authentication → Email Templates → Magic Link**  
-   Include the one-time code so sign-in works even when the email link opens in a different browser:
-
-```html
-<h2>Your SafeZone sign-in code</h2>
-<p>Enter this code in SafeZone:</p>
-<p style="font-size:24px;font-weight:700;letter-spacing:4px">{{ .Token }}</p>
-<p>Or open this link in the <strong>same browser</strong> where you requested sign-in:</p>
-<p><a href="{{ .ConfirmationURL }}">Sign in to SafeZone</a></p>
-```
-
-   Optional: under **Authentication → Providers → Anonymous**, enable Anonymous Sign-Ins so **Continue without email** works when Supabase email rate limits are hit.
-4. **Edge Functions → Secrets** (never commit `service_role` or `VAPID_PRIVATE_KEY`):
+3. **SQL Editor** → also run `supabase/rpc_patient_tracking.sql`  
+   This enables real QR pairing + patient location tracking even when Edge Functions are not deployed.
+4. **Authentication → Email Templates → Magic Link** (optional)  
+   Include `{{ .Token }}` if you want email OTP codes in addition to magic links.  
+   Optional: under **Authentication → Providers → Anonymous**, enable Anonymous Sign-Ins so **Continue without email** works when email rate limits are hit.
+5. **Edge Functions → Secrets** (never commit `service_role` or `VAPID_PRIVATE_KEY`):
 
 ```bash
 supabase secrets set \
@@ -87,7 +80,7 @@ supabase secrets set \
   VAPID_SUBJECT=mailto:you@example.com
 ```
 
-5. Deploy edge functions:
+6. Deploy edge functions:
 
 ```bash
 supabase link --project-ref rjlvxopxrfljhcftuqpw

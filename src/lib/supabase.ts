@@ -412,21 +412,65 @@ export async function createPairing(householdId: string) {
   } catch (caught) {
     const detail = caught instanceof Error ? caught.message : "Could not create pairing code.";
     throw new Error(
-      `${detail} If this keeps failing, run supabase/pairing_insert_policy.sql in the Supabase SQL Editor.`
+      `${detail} Run supabase/rpc_patient_tracking.sql in the Supabase SQL Editor so pairing can save.`
     );
   }
 }
 
 export async function claimPairing(householdId: string, token: string) {
   const client = requireSupabase();
-  const { data, error } = await client.functions.invoke("claim_pairing", {
-    body: { householdId, token }
+
+  const invoked = await client.functions
+    .invoke("claim_pairing", { body: { householdId, token } })
+    .catch(() => ({ data: null, error: { message: "Edge Function unavailable" } as Error }));
+
+  if (
+    !invoked.error &&
+    invoked.data &&
+    typeof invoked.data === "object" &&
+    "deviceToken" in (invoked.data as Record<string, unknown>)
+  ) {
+    return invoked.data as {
+      deviceToken: string;
+      deviceId: string;
+      household: HouseholdProfile;
+    };
+  }
+
+  const { data, error } = await client.rpc("claim_pairing_token", {
+    p_household_id: householdId,
+    p_token: token
   });
-  if (error) throw error;
-  return data as {
+  if (error) {
+    throw new Error(
+      `${error.message} Run supabase/rpc_patient_tracking.sql in the Supabase SQL Editor to enable real pairing.`
+    );
+  }
+
+  const payload = data as {
     deviceToken: string;
     deviceId: string;
-    household: HouseholdProfile;
+    household: {
+      id: string;
+      patientName: string;
+      caregiverName: string;
+      pairedAt: string | null;
+      relationship?: string;
+      geofenceState?: GeofenceState;
+    };
+  };
+
+  return {
+    deviceToken: payload.deviceToken,
+    deviceId: payload.deviceId,
+    household: {
+      id: payload.household.id,
+      patientName: payload.household.patientName,
+      caregiverName: payload.household.caregiverName,
+      pairedAt: payload.household.pairedAt,
+      relationship: payload.household.relationship,
+      geofenceState: payload.household.geofenceState
+    }
   };
 }
 
@@ -442,12 +486,94 @@ export async function ingestLocation(
   deviceToken: string
 ) {
   const client = requireSupabase();
-  const { data, error } = await client.functions.invoke("ingest_location", {
-    body: payload,
-    headers: { Authorization: `Bearer ${deviceToken}` }
+
+  const invoked = await client.functions
+    .invoke("ingest_location", {
+      body: payload,
+      headers: { Authorization: `Bearer ${deviceToken}` }
+    })
+    .catch(() => ({ data: null, error: { message: "Edge Function unavailable" } as Error }));
+
+  if (
+    !invoked.error &&
+    invoked.data &&
+    typeof invoked.data === "object" &&
+    "state" in (invoked.data as Record<string, unknown>)
+  ) {
+    return invoked.data as {
+      id: string;
+      timestamp: string;
+      state: GeofenceState;
+      previousState: GeofenceState;
+      graceEndsAt: string | null;
+    };
+  }
+
+  const { data: context, error: contextError } = await client.rpc("get_patient_tracking_context", {
+    p_household_id: payload.householdId,
+    p_device_token: deviceToken
+  });
+  if (contextError) {
+    throw new Error(
+      `${contextError.message} Run supabase/rpc_patient_tracking.sql in the Supabase SQL Editor to enable live tracking.`
+    );
+  }
+
+  const tracking = context as {
+    deviceId: string;
+    geofenceState: GeofenceState;
+    graceStartedAt: string | null;
+    alertSentForExit: boolean;
+    zones: Zone[];
+  };
+
+  const { applyLocationLocally, createGeofenceMemory } = await import("./geofence");
+  const memory = createGeofenceMemory();
+  memory.state = tracking.geofenceState || "unknown";
+  memory.graceStartedAt = tracking.graceStartedAt ? Date.parse(tracking.graceStartedAt) : null;
+  memory.alertSentForExit = Boolean(tracking.alertSentForExit);
+
+  const { ping, evaluation } = applyLocationLocally({
+    memory,
+    zones: tracking.zones || [],
+    householdId: payload.householdId,
+    lat: payload.lat,
+    lng: payload.lng,
+    accuracy: payload.accuracy,
+    battery: payload.battery,
+    timestamp: payload.timestamp
+  });
+
+  const { data, error } = await client.rpc("ingest_patient_location", {
+    p_household_id: payload.householdId,
+    p_device_token: deviceToken,
+    p_lat: payload.lat,
+    p_lng: payload.lng,
+    p_accuracy: payload.accuracy,
+    p_battery: payload.battery,
+    p_state: evaluation.state,
+    p_zone_id: evaluation.zoneId,
+    p_distance_to_boundary_m: evaluation.distanceToBoundaryM,
+    p_grace_ends_at: evaluation.graceEndsAt,
+    p_grace_started_at: memory.graceStartedAt ? new Date(memory.graceStartedAt).toISOString() : null
   });
   if (error) throw error;
-  return data as { id: string; timestamp: string; state: GeofenceState; previousState: GeofenceState; graceEndsAt: string | null };
+
+  const result = data as {
+    id: string;
+    timestamp: string;
+    state: GeofenceState;
+    previousState: GeofenceState;
+    graceEndsAt: string | null;
+  };
+
+  return {
+    id: result.id || ping.id,
+    timestamp: result.timestamp || payload.timestamp,
+    state: result.state || evaluation.state,
+    previousState: result.previousState || evaluation.previousState,
+    graceEndsAt: result.graceEndsAt ?? evaluation.graceEndsAt
+  };
 }
 
 export async function subscribePush(householdId: string, caregiverLabel: string, subscriptionObject: PushSubscription) {
