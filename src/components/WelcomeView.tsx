@@ -123,10 +123,10 @@ export function WelcomeView() {
         <div className="story-nav-links">
           <a href="#how-it-works">How it works</a>
           <a href="#care-confidence">Care Confidence</a>
-          <a href="#family">For families</a>
+          <a href="/live">Live tracker</a>
           <a href="/caregiver?demo=1">Dashboard</a>
         </div>
-        <a href="/onboarding" className="story-nav-cta">Start tracking</a>
+        <a href="/live" className="story-nav-cta">Start tracking</a>
       </nav>
 
       <section className="story-hero">
@@ -137,8 +137,8 @@ export function WelcomeView() {
             SafeZone turns two phones your family already owns into a shared safety net for dementia care—without expensive trackers or complicated dashboards.
           </p>
           <div className="story-actions">
-            <a href="/onboarding" className="primary-story-cta">Start tracking <span>→</span></a>
-            <a href="#live-product-demo" className="secondary-story-cta"><span>▶</span> Watch the live story</a>
+            <a href="/live" className="primary-story-cta">Start tracking <span>→</span></a>
+            <a href="/caregiver?demo=1" className="secondary-story-cta"><span>▶</span> Watch the live story</a>
           </div>
           <div className="hero-trust">
             <span>✓ No special hardware</span>

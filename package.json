@@ -17,6 +17,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.110.2",
     "express": "latest",
+    "peerjs": "^1.5.5",
     "qrcode": "^1.5.4",
     "web-push": "latest",
     "ws": "latest"

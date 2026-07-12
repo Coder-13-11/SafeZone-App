@@ -8,7 +8,6 @@ import {
   SafetyHeroCard
 } from "./components/CaregiverCards";
 import { WelcomeView } from "./components/WelcomeView";
-import { OnboardingFlow } from "./components/OnboardingFlow";
 import { DashboardShell } from "./components/DashboardShell";
 import type { DashboardView } from "./components/DashboardShell";
 import { PatientPairingCard } from "./components/PatientPairingCard";
@@ -28,6 +27,23 @@ import {
   vapidPublicKey
 } from "./lib/supabase";
 import { subscribeToHousehold } from "./lib/realtime";
+import {
+  applyLocationLocally,
+  createGeofenceMemory
+} from "./lib/geofence";
+import {
+  claimLivePairing,
+  createLivePairing,
+  ensureLiveHousehold,
+  getLiveGeofenceMemory,
+  ingestLiveLocation,
+  isLiveMode,
+  readLiveHousehold,
+  respondLive,
+  saveLiveZones,
+  subscribeLiveHousehold,
+  writeLiveHousehold
+} from "./lib/liveSession";
 import type {
   BatteryManagerLike,
   CareResponse,
@@ -41,10 +57,11 @@ import type {
 } from "./types";
 
 const initialQuery = new URLSearchParams(window.location.search);
+const liveMode = isLiveMode();
 const householdId =
   initialQuery.get("household") ||
   window.localStorage.getItem("safezone-household-id") ||
-  "demo-household";
+  (liveMode ? ensureLiveHousehold().id : "demo-household");
 const normalTiles = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 const satelliteTiles =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
@@ -254,6 +271,10 @@ function urlBase64ToUint8Array(base64String: string) {
 }
 
 async function fetchZones() {
+  if (liveMode || householdId.startsWith("live-") || readLiveHousehold(householdId)) {
+    const household = readLiveHousehold(householdId) || ensureLiveHousehold(householdId);
+    return { zones: household.zones };
+  }
   if (supabaseEnabled && householdId !== "demo-household") {
     return { zones: await fetchSupabaseZones(householdId) };
   }
@@ -267,6 +288,21 @@ async function fetchZones() {
 }
 
 async function saveZone(zone: Partial<Zone> & { points: LatLngPoint[] }) {
+  if (liveMode || readLiveHousehold(householdId)) {
+    const household = readLiveHousehold(householdId) || ensureLiveHousehold(householdId);
+    const nextZone: Zone = {
+      id: zone.id || crypto.randomUUID(),
+      householdId,
+      name: zone.name || "Home Safe Zone",
+      color: zone.color || "#8fbf9f",
+      isActive: true,
+      points: zone.points
+    };
+    return saveLiveZones(householdId, [
+      ...household.zones.filter((item) => item.id !== nextZone.id),
+      nextZone
+    ]);
+  }
   if (supabaseEnabled && householdId !== "demo-household") {
     return saveSupabaseZone(householdId, zone);
   }
@@ -298,18 +334,24 @@ function App() {
   }
 
   if (path.startsWith("/onboarding")) {
-    return <OnboardingFlow />;
+    window.location.replace("/live");
+    return null;
+  }
+
+  if (path.startsWith("/live")) {
+    const household = ensureLiveHousehold(initialQuery.get("household"));
+    if (initialQuery.get("household") !== household.id) {
+      window.location.replace(`/live?household=${encodeURIComponent(household.id)}`);
+      return null;
+    }
+    return <CaregiverView />;
   }
 
   if (path.startsWith("/caregiver")) {
     const isDemo = initialQuery.get("demo") === "1";
-    if (!isDemo && !supabaseEnabled) {
-      const storedHousehold = window.localStorage.getItem("safezone-household-id");
-      const completedHousehold = window.localStorage.getItem("safezone-setup-complete");
-      if (!storedHousehold || completedHousehold !== storedHousehold) {
-        window.location.replace("/onboarding");
-        return null;
-      }
+    if (!isDemo && !supabaseEnabled && !liveMode) {
+      window.location.replace("/live");
+      return null;
     }
     return supabaseEnabled && !isDemo ? (
       <AuthGate>
@@ -328,6 +370,7 @@ function App() {
 function PatientView() {
   const { battery } = useBattery();
   const pairingToken = initialQuery.get("pair");
+  const patientLiveMode = liveMode || initialQuery.get("live") === "1";
   const deviceTokenKey = `safezone-patient-token:${householdId}`;
   const [patientName, setPatientName] = useState(
     () => window.localStorage.getItem("safezone-patient-name") || ""
@@ -358,34 +401,52 @@ function PatientView() {
       return;
     }
 
-    (supabaseEnabled
-      ? claimSupabasePairing(householdId, pairingToken)
-      : fetch("/api/pairing/claim", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ householdId, token: pairingToken })
-        }).then(async (response) => {
-          const result = await response.json();
-          if (!response.ok) throw new Error(result.error || "This pairing link could not be used.");
-          return result;
-        }))
+    const claim = patientLiveMode
+      ? Promise.resolve().then(() => claimLivePairing(householdId, pairingToken))
+      : supabaseEnabled
+        ? claimSupabasePairing(householdId, pairingToken)
+        : fetch("/api/pairing/claim", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ householdId, token: pairingToken })
+          }).then(async (response) => {
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || "This pairing link could not be used.");
+            return result;
+          });
+
+    claim
       .then((result) => {
         window.localStorage.setItem(deviceTokenKey, result.deviceToken);
         window.localStorage.setItem("safezone-household-id", householdId);
         window.localStorage.setItem("safezone-patient-name", result.household.patientName);
         setPatientName(result.household.patientName);
+        setCaregiverName(result.household.caregiverName || "");
         setActivationState("paired");
-        window.history.replaceState({}, "", `/patient?household=${encodeURIComponent(householdId)}`);
+        window.history.replaceState(
+          {},
+          "",
+          `/patient?${patientLiveMode ? "live=1&" : ""}household=${encodeURIComponent(householdId)}`
+        );
       })
       .catch((caught) => {
         setActivationState("error");
         setActivationMessage(caught instanceof Error ? caught.message : "This pairing link could not be used.");
       });
-  }, [deviceTokenKey, pairingToken]);
+  }, [deviceTokenKey, pairingToken, patientLiveMode]);
 
   useEffect(() => {
     if (activationState !== "paired" || householdId === "demo-household") {
       if (householdId === "demo-household") setCaregiverName("Sarah");
+      return;
+    }
+
+    if (patientLiveMode) {
+      const household = readLiveHousehold(householdId);
+      if (household) {
+        setCaregiverName(household.caregiverName || "");
+        if (household.patientName) setPatientName(household.patientName);
+      }
       return;
     }
 
@@ -403,7 +464,7 @@ function PatientView() {
       .catch(() => {
         // Tracking can continue even if the display profile is temporarily unavailable.
       });
-  }, [activationState]);
+  }, [activationState, patientLiveMode]);
 
   useEffect(() => {
     if (activationState !== "paired") return;
@@ -436,10 +497,22 @@ function PatientView() {
 
         try {
           const deviceToken = window.localStorage.getItem(deviceTokenKey);
-          if (!deviceToken && householdId !== "demo-household") {
+          if (!deviceToken && householdId !== "demo-household" && !patientLiveMode) {
             throw new Error("This phone needs to be paired again.");
           }
-          const result = supabaseEnabled && householdId !== "demo-household"
+          const result = patientLiveMode
+            ? ingestLiveLocation(
+                householdId,
+                {
+                  lat: payload.lat,
+                  lng: payload.lng,
+                  accuracy: payload.accuracy,
+                  battery: payload.battery,
+                  timestamp: payload.timestamp
+                },
+                getLiveGeofenceMemory(householdId)
+              )
+            : supabaseEnabled && householdId !== "demo-household"
             ? await ingestSupabaseLocation(payload, deviceToken || "")
             : await fetch(apiUrl("/api/location"), {
                 method: "POST",
@@ -608,6 +681,7 @@ function CaregiverView() {
   const registration = useServiceWorkerRegistration();
   const { battery, supported: batterySupported } = useBattery();
   const demoMode = initialQuery.get("demo") === "1";
+  const caregiverLiveMode = liveMode || Boolean(readLiveHousehold(householdId));
   const initialPatientName = demoMode
     ? "Mary Johnson"
     : window.localStorage.getItem("safezone-patient-name") || "";
@@ -649,6 +723,7 @@ function CaregiverView() {
   const [confidenceExpanded, setConfidenceExpanded] = useState(false);
   const [demoStep, setDemoStep] = useState(0);
   const [demoRunning, setDemoRunning] = useState(false);
+  const [livePairUrl, setLivePairUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [profileStatus, setProfileStatus] = useState("");
   const [nowTick, setNowTick] = useState(Date.now());
@@ -697,25 +772,35 @@ function CaregiverView() {
       .then(({ zones }) => setZones(zones))
       .catch((error) => setError(error.message));
 
+    if (caregiverLiveMode) {
+      const household = readLiveHousehold(householdId) || ensureLiveHousehold(householdId);
+      setPatientName(household.patientName);
+      setCaregiverLabel(household.caregiverName || caregiverLabel || "Sarah");
+      setPatientPairedAt(household.pairedAt);
+      setHistory(household.history);
+      if (household.latest) {
+        setLivePing(household.latest);
+        setSmoothedLocation({ lat: household.latest.lat, lng: household.latest.lng });
+        previousStateRef.current = household.latest.stateAtTime;
+      }
+      if (household.response) setCareResponse(household.response);
+      setConnectionState("live");
+      const pairing = createLivePairing(household.id);
+      setLivePairUrl(pairing.patientURL);
+      return;
+    }
+
     (supabaseEnabled && householdId !== "demo-household"
-      ? fetchSupabaseHistory(householdId).then((history) => ({ history }))
+      ? fetchSupabaseHistory(householdId)
       : fetch(apiUrl(`/api/history?householdId=${householdId}`)).then((response) => response.json()))
-      .then((data: { history: LocationPing[] }) => {
-        setHistory(data.history || []);
-        const latest = data.history?.[data.history.length - 1];
-        if (latest) {
-          setLivePing((current) => current || latest);
-          setSmoothedLocation((current) => current || { lat: latest.lat, lng: latest.lng });
-        }
-      })
+      .then((data) => setHistory(data.history || []))
       .catch(() => setHistory([]));
 
     (supabaseEnabled && householdId !== "demo-household"
-      ? getSupabaseHouseholdProfile(householdId).then((household) => ({ household }))
+      ? getSupabaseHouseholdProfile(householdId).then((household) => (household ? { household } : null))
       : fetch(apiUrl(`/api/households/${householdId}`)).then((response) => (response.ok ? response.json() : null)))
       .then((data) => {
         if (!data?.household) return;
-        setPatientPairedAt(data.household.pairedAt);
         if (!demoMode && data.household.patientName) {
           setPatientName(data.household.patientName);
           window.localStorage.setItem("safezone-patient-name", data.household.patientName);
@@ -723,9 +808,10 @@ function CaregiverView() {
         if (!demoMode && data.household.caregiverName) {
           setCaregiverLabel(data.household.caregiverName);
         }
+        if (data.household.pairedAt) setPatientPairedAt(data.household.pairedAt);
       })
-      .catch(() => null);
-  }, []);
+      .catch(() => undefined);
+  }, [caregiverLiveMode]);
 
   useEffect(() => {
     if (!mapElementRef.current || mapRef.current) {
@@ -829,6 +915,51 @@ function CaregiverView() {
   }, [tileMode]);
 
   useEffect(() => {
+    if (caregiverLiveMode) {
+      setConnectionState("live");
+      return subscribeLiveHousehold(householdId, "caregiver", (message) => {
+        if (message.type === "household") {
+          setZones(message.household.zones);
+          setPatientPairedAt(message.household.pairedAt);
+          setHistory(message.household.history);
+          if (message.household.latest) {
+            setLivePing(message.household.latest);
+            setSmoothedLocation({ lat: message.household.latest.lat, lng: message.household.latest.lng });
+          }
+          if (message.household.response) setCareResponse(message.household.response);
+          return;
+        }
+        if (message.type === "zones") setZones(message.zones);
+        if (message.type === "care_response") setCareResponse(message.response);
+        if (message.type === "patient_paired") setPatientPairedAt(message.pairedAt);
+        if (message.type === "location") {
+          const evaluated = ingestLiveLocation(
+            householdId,
+            {
+              lat: message.ping.lat,
+              lng: message.ping.lng,
+              accuracy: message.ping.accuracy,
+              battery: message.ping.battery,
+              timestamp: message.ping.timestamp
+            },
+            getLiveGeofenceMemory(householdId),
+            { broadcast: false }
+          );
+          setLivePing(evaluated.ping);
+          setHistory((current) => {
+            if (current.some((ping) => ping.id === evaluated.ping.id)) return current;
+            return [...current.slice(-499), evaluated.ping];
+          });
+          setSmoothedLocation((current) => ema(current, { lat: evaluated.ping.lat, lng: evaluated.ping.lng }));
+          setPatientPairedAt((current) => current || evaluated.ping.timestamp);
+          if (evaluated.ping.stateAtTime !== previousStateRef.current) {
+            handleStateChange(previousStateRef.current, evaluated.ping.stateAtTime);
+            previousStateRef.current = evaluated.ping.stateAtTime;
+          }
+        }
+      });
+    }
+
     if (supabaseEnabled && householdId !== "demo-household") {
       return subscribeToHousehold(householdId, {
         onStatus: setConnectionState,
@@ -912,7 +1043,7 @@ function CaregiverView() {
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       socket?.close();
     };
-  }, [caregiverLabel]);
+  }, [caregiverLabel, caregiverLiveMode]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1202,7 +1333,9 @@ function CaregiverView() {
 
   async function acknowledgeResponse() {
     try {
-      const response = supabaseEnabled
+      const response = caregiverLiveMode
+        ? respondLive(householdId, caregiverLabel)
+        : supabaseEnabled
         ? await acknowledgeSupabaseResponse(householdId, caregiverLabel)
         : await fetch(apiUrl("/api/respond"), {
             method: "POST",
@@ -1260,25 +1393,43 @@ function CaregiverView() {
       const zoneResult = await saveZone(demoZone);
       if (demoRunRef.current !== runId) return;
       setZones(zoneResult.zones);
+      setPatientPairedAt(new Date().toISOString());
+      setConnectionState("live");
 
+      const memory = createGeofenceMemory();
       for (const point of path) {
         if (demoRunRef.current !== runId) return;
         setDemoStep(point.step);
 
-        const response = await fetch(apiUrl("/api/location"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            householdId,
-            lat: point.lat,
-            lng: point.lng,
-            accuracy: 7,
-            battery: 84,
-            timestamp: new Date().toISOString()
-          })
+        const timestamp = new Date().toISOString();
+        const { ping, evaluation } = applyLocationLocally({
+          memory,
+          zones: zoneResult.zones,
+          householdId,
+          lat: point.lat,
+          lng: point.lng,
+          accuracy: 7,
+          battery: 84,
+          timestamp
         });
 
-        if (!response.ok) throw new Error("The guided demo could not reach the SafeZone server.");
+        if (caregiverLiveMode) {
+          const household = readLiveHousehold(householdId) || ensureLiveHousehold(householdId);
+          household.zones = zoneResult.zones;
+          household.latest = ping;
+          household.history = [...household.history, ping].slice(-120);
+          household.pairedAt = household.pairedAt || timestamp;
+          writeLiveHousehold(household);
+        }
+
+        setLivePing(ping);
+        setHistory((current) => [...current.slice(-499), ping]);
+        setSmoothedLocation((current) => ema(current, { lat: ping.lat, lng: ping.lng }));
+        if (evaluation.state !== previousStateRef.current) {
+          handleStateChange(previousStateRef.current, evaluation.state);
+          previousStateRef.current = evaluation.state;
+        }
+
         if (point.wait) await new Promise((resolve) => window.setTimeout(resolve, point.wait));
       }
     } catch (error) {
@@ -1306,12 +1457,12 @@ function CaregiverView() {
       patientName={patientName}
       connected={connectionState === "live"}
     >
-      {demoMode ? (
+      {demoMode || caregiverLiveMode ? (
         <section className="demo-director" aria-label="Guided demo controls">
           <div className="demo-director-copy">
-            <span className="demo-label"><i /> Guided demo · Simulated movement</span>
+            <span className="demo-label"><i /> {caregiverLiveMode ? "Live tracker · No Supabase" : "Guided demo · Simulated movement"}</span>
             <strong>
-              {demoStep === 0 && "Ready to tell the SafeZone story"}
+              {demoStep === 0 && (caregiverLiveMode ? "Tracker ready — simulate or pair a phone" : "Ready to tell the SafeZone story")}
               {demoStep === 1 && "Mary is safe at home"}
               {demoStep === 2 && "A gentle warning before danger"}
               {demoStep === 3 && "SafeZone confirms the boundary crossing"}
@@ -1323,9 +1474,14 @@ function CaregiverView() {
             {[1, 2, 3, 4, 5].map((step) => <span key={step} className={demoStep >= step ? "active" : ""} />)}
           </div>
           <button type="button" onClick={runGuidedDemo} disabled={demoRunning}>
-            {demoRunning ? "Story playing…" : demoStep > 0 ? "Replay story" : "Start live story"}
+            {demoRunning ? "Story playing…" : demoStep > 0 ? "Replay story" : "Start connected tracker story"}
           </button>
-          <a href="/caregiver">Exit demo</a>
+          {caregiverLiveMode && livePairUrl ? (
+            <a href={livePairUrl} target="_blank" rel="noreferrer">
+              Open patient tracker link
+            </a>
+          ) : null}
+          <a href="/">{caregiverLiveMode ? "Back home" : "Exit demo"}</a>
         </section>
       ) : null}
       {activeView !== "overview" && activeView !== "map" ? (
