@@ -55,6 +55,39 @@ Set:
 Browser geolocation, service workers, and Web Push require HTTPS outside localhost.
 Scanning a QR code from a separate patient phone therefore requires an HTTPS deployment; a `localhost` pairing URL works only on the same machine.
 
+## Live deployment
+
+- **App:** https://safe-zone-app.vercel.app
+- **Supabase project:** `rjlvxopxrfljhcftuqpw` → https://rjlvxopxrfljhcftuqpw.supabase.co
+- **GitHub:** https://github.com/Coder-13-11/SafeZone-App
+
+Vercel build env vars are configured in `vercel.json`. Pushing to `main` redeploys automatically.
+
+### Supabase one-time setup
+
+1. **SQL Editor** → run all of `supabase/schema.sql`
+2. **Authentication → URL Configuration**
+   - Site URL: `https://safe-zone-app.vercel.app`
+   - Redirect URLs: `https://safe-zone-app.vercel.app/onboarding`
+3. **Edge Functions → Secrets** (never commit `service_role` or `VAPID_PRIVATE_KEY`):
+
+```bash
+supabase secrets set \
+  SUPABASE_URL=https://rjlvxopxrfljhcftuqpw.supabase.co \
+  SUPABASE_SERVICE_ROLE_KEY=<from Supabase Settings → API> \
+  PUBLIC_URL=https://safe-zone-app.vercel.app \
+  VAPID_PUBLIC_KEY=BJJlOSiaWxLqMIPJIHzqVfODNyMlcejedSZ-Gq_ddt3ksflZXrmH9joVQHEgOJKgIRgfmd3eMew1cXCdZoFe_m0 \
+  VAPID_PRIVATE_KEY=<from npm run vapid:generate> \
+  VAPID_SUBJECT=mailto:you@example.com
+```
+
+4. Deploy edge functions:
+
+```bash
+supabase link --project-ref rjlvxopxrfljhcftuqpw
+npm run supabase:functions
+```
+
 ## Vercel + Supabase deployment
 
 Use this path for public PWA reliability. Vercel serves the React app; Supabase stores accounts, households, zones, pairing sessions, patient-device tokens, location history, push subscriptions, care responses, and realtime updates.

@@ -1,4 +1,12 @@
 {
+  "build": {
+    "env": {
+      "VITE_SUPABASE_URL": "https://rjlvxopxrfljhcftuqpw.supabase.co",
+      "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqbHZ4b3B4cmZsamhjZnR1cXB3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTExMzYsImV4cCI6MjA5OTQyNzEzNn0.rpb0LXZ0LksfiGRE9TrzxGONBwP70WXY0JArLpjFieY",
+      "VITE_PUBLIC_URL": "https://safe-zone-app.vercel.app",
+      "VITE_VAPID_PUBLIC_KEY": "BJJlOSiaWxLqMIPJIHzqVfODNyMlcejedSZ-Gq_ddt3ksflZXrmH9joVQHEgOJKgIRgfmd3eMew1cXCdZoFe_m0"
+    }
+  },
   "rewrites": [
     { "source": "/((?!assets/|sw.js|manifest.json|icon.svg).*)", "destination": "/index.html" }
   ],
