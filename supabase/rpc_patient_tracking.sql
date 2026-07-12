@@ -45,7 +45,7 @@ declare
   pairing public.pairing_sessions%rowtype;
   device_token text;
   device_id uuid;
-  claimed_at timestamptz := now();
+  claimed_ts timestamptz := now();
   household_row public.households%rowtype;
   caregiver_label text;
 begin
@@ -55,12 +55,12 @@ begin
 
   select *
   into pairing
-  from public.pairing_sessions
-  where household_id = p_household_id
-    and token_hash = public.sha256_hex(p_token)
-    and claimed_at is null
-    and expires_at > now()
-  order by created_at desc
+  from public.pairing_sessions ps
+  where ps.household_id = p_household_id
+    and ps.token_hash = public.sha256_hex(p_token)
+    and ps.claimed_at is null
+    and ps.expires_at > now()
+  order by ps.created_at desc
   limit 1;
 
   if pairing.id is null then
@@ -68,7 +68,7 @@ begin
   end if;
 
   update public.patient_devices
-  set replaced_at = claimed_at
+  set replaced_at = claimed_ts
   where household_id = p_household_id
     and replaced_at is null;
 
@@ -79,11 +79,11 @@ begin
   returning id into device_id;
 
   update public.pairing_sessions
-  set claimed_at = claimed_at
+  set claimed_at = claimed_ts
   where id = pairing.id;
 
   update public.households
-  set paired_at = claimed_at
+  set paired_at = claimed_ts
   where id = p_household_id
   returning * into household_row;
 
