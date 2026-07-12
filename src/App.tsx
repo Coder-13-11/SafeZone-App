@@ -235,8 +235,8 @@ function useServiceWorkerRegistration() {
       return;
     }
 
-    navigator.serviceWorker
-      .register("/sw.js")
+    import("./lib/push")
+      .then(({ ensureActiveServiceWorker }) => ensureActiveServiceWorker())
       .then(setRegistration)
       .catch((error) => console.warn("Service worker registration failed", error));
   }, []);
@@ -1273,17 +1273,15 @@ function CaregiverView() {
   }
 
   async function subscribeToPush() {
-    if (!registration) {
-      setPushStatus("Service worker is still starting. Try again in a moment.");
-      return;
-    }
-
     if (!("Notification" in window) || !("PushManager" in window)) {
       setPushStatus("This browser does not support Web Push.");
       return;
     }
 
     try {
+      const { ensureActiveServiceWorker, base64ToUint8Array } = await import("./lib/push");
+      const activeRegistration = registration || (await ensureActiveServiceWorker());
+
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       const isStandalone =
         window.matchMedia("(display-mode: standalone)").matches ||
@@ -1306,10 +1304,14 @@ function CaregiverView() {
         publicKey = ((await keyResponse.json()) as { publicKey: string }).publicKey;
       }
       if (!publicKey) throw new Error("Notifications are not configured on this SafeZone deployment.");
-      const subscriptionObject = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey)
-      });
+
+      const existing = await activeRegistration.pushManager.getSubscription();
+      const subscriptionObject =
+        existing ||
+        (await activeRegistration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: base64ToUint8Array(publicKey)
+        }));
 
       if (supabaseEnabled) {
         await subscribeSupabasePush(householdId, caregiverLabel, subscriptionObject);

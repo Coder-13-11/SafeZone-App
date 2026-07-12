@@ -15,6 +15,7 @@ import {
   supabaseEnabled,
   vapidPublicKey
 } from "../lib/supabase";
+import { base64ToUint8Array, ensureActiveServiceWorker } from "../lib/push";
 
 type HouseholdProfile = {
   id: string;
@@ -65,12 +66,6 @@ function circlePoints(center: ProposedLocation, radiusM: number): LatLngPoint[] 
         (east / (earthRadius * Math.cos(latitudeRadians))) * (180 / Math.PI)
     };
   });
-}
-
-function base64ToUint8Array(value: string) {
-  const padding = "=".repeat((4 - (value.length % 4)) % 4);
-  const decoded = window.atob((value + padding).replace(/-/g, "+").replace(/_/g, "/"));
-  return Uint8Array.from([...decoded].map((character) => character.charCodeAt(0)));
 }
 
 export function OnboardingFlow() {
@@ -325,7 +320,7 @@ export function OnboardingFlow() {
         throw new Error("Notifications were not allowed. You can enable them later in Settings.");
       }
 
-      const registration = await navigator.serviceWorker.register("/sw.js");
+      const registration = await ensureActiveServiceWorker();
       let publicKey = vapidPublicKey;
       if (!supabaseEnabled) {
         const keyResponse = await fetch("/api/vapid-public-key");
@@ -337,10 +332,13 @@ export function OnboardingFlow() {
       if (!publicKey) {
         throw new Error("Notifications are not available on this SafeZone deployment yet.");
       }
-      const subscriptionObject = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: base64ToUint8Array(publicKey)
-      });
+      const existing = await registration.pushManager.getSubscription();
+      const subscriptionObject =
+        existing ||
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: base64ToUint8Array(publicKey)
+        }));
 
       if (supabaseEnabled) {
         if (!household?.id) throw new Error("Create your family before enabling notifications.");
