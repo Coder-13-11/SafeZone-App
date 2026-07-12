@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
   completeAuthFromUrl,
+  ensureCaregiverSession,
   getSession,
   sendMagicLink,
   supabase,
@@ -65,4 +66,8 @@ export async function requestCaregiverLogin(email: string) {
 
 export async function verifyCaregiverLogin(email: string, token: string) {
   await verifyEmailOtp(email, token);
+}
+
+export async function continueWithoutEmail() {
+  await ensureCaregiverSession();
 }

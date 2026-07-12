@@ -105,7 +105,15 @@ export async function sendMagicLink(email: string) {
       shouldCreateUser: true
     }
   });
-  if (error) throw error;
+  if (error) {
+    const message = error.message.toLowerCase();
+    if (message.includes("rate") || message.includes("email rate") || error.status === 429) {
+      throw new Error(
+        "Email rate limit hit (Supabase free tier). Wait about an hour, try a different email, or continue without email below."
+      );
+    }
+    throw error;
+  }
 }
 
 export async function verifyEmailOtp(email: string, token: string) {
@@ -116,6 +124,26 @@ export async function verifyEmailOtp(email: string, token: string) {
     type: "email"
   });
   if (error) throw error;
+}
+
+export async function ensureCaregiverSession(): Promise<Session | null> {
+  const client = requireSupabase();
+  const existing = await getSession();
+  if (existing) return existing;
+
+  const { data, error } = await client.auth.signInAnonymously({
+    options: {
+      data: { role: "caregiver" }
+    }
+  });
+  if (error) {
+    throw new Error(
+      error.message.toLowerCase().includes("anonymous")
+        ? "Enable Anonymous sign-ins in Supabase (Authentication → Providers → Anonymous), then try again."
+        : error.message
+    );
+  }
+  return data.session;
 }
 
 export async function completeAuthFromUrl() {

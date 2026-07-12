@@ -83,6 +83,8 @@ Vercel build env vars are configured in `vercel.json`. Pushing to `main` redeplo
 <p>Or open this link in the <strong>same browser</strong> where you requested sign-in:</p>
 <p><a href="{{ .ConfirmationURL }}">Sign in to SafeZone</a></p>
 ```
+
+   Optional: under **Authentication → Providers → Anonymous**, enable Anonymous Sign-Ins so **Continue without email** works when Supabase email rate limits are hit.
 4. **Edge Functions → Secrets** (never commit `service_role` or `VAPID_PRIVATE_KEY`):
 
 ```bash

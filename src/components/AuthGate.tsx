@@ -1,6 +1,11 @@
 import { useState } from "react";
 import type React from "react";
-import { requestCaregiverLogin, useSafeZoneSession, verifyCaregiverLogin } from "../lib/auth";
+import {
+  continueWithoutEmail,
+  requestCaregiverLogin,
+  useSafeZoneSession,
+  verifyCaregiverLogin
+} from "../lib/auth";
 import { supabaseEnabled } from "../lib/supabase";
 import { SafeZoneMark } from "./WelcomeView";
 
@@ -12,6 +17,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState("");
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [skipping, setSkipping] = useState(false);
 
   if (!supabaseEnabled || authenticated) {
     return <>{children}</>;
@@ -45,6 +51,19 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       setStatus(caught instanceof Error ? caught.message : "That code did not work. Try again or resend.");
     } finally {
       setVerifying(false);
+    }
+  }
+
+  async function skipEmail() {
+    setSkipping(true);
+    setStatus("");
+    try {
+      await continueWithoutEmail();
+      setStatus("Continuing without email…");
+    } catch (caught) {
+      setStatus(caught instanceof Error ? caught.message : "Could not continue without email.");
+    } finally {
+      setSkipping(false);
     }
   }
 
@@ -88,7 +107,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                 />
               </label>
             ) : null}
-            <button type="submit" disabled={sending || verifying}>
+            <button type="submit" disabled={sending || verifying || skipping}>
               {sent
                 ? verifying
                   ? "Verifying…"
@@ -101,7 +120,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 className="auth-secondary"
-                disabled={sending}
+                disabled={sending || skipping}
                 onClick={() => {
                   setSent(false);
                   setCode("");
@@ -111,6 +130,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                 Use a different email
               </button>
             ) : null}
+            <button type="button" className="auth-secondary" disabled={sending || verifying || skipping} onClick={skipEmail}>
+              {skipping ? "Starting…" : "Continue without email"}
+            </button>
           </form>
         ) : null}
         {authError ? (
