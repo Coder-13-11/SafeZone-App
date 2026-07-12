@@ -495,6 +495,9 @@ export function OnboardingFlow() {
                   <button type="button" className="onboarding-primary" onClick={finish}>
                     Go to caregiver dashboard <span>→</span>
                   </button>
+                  <a className="finish-link" href="/live">
+                    Or open live tracker (works without pairing) →
+                  </a>
                   <p className="ios-onboarding-note">Skip pairing for now and open the dashboard. You can connect {patientName}’s phone later from Family.</p>
                   <button type="button" className="onboarding-back" onClick={() => { setError(null); setStep(2); }}>← Edit Home Zone</button>
                   <small className={`expiry-note ${pairingExpired ? "expired" : ""}`}>

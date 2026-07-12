@@ -8,6 +8,7 @@ import {
   SafetyHeroCard
 } from "./components/CaregiverCards";
 import { WelcomeView } from "./components/WelcomeView";
+import { OnboardingFlow } from "./components/OnboardingFlow";
 import { DashboardShell } from "./components/DashboardShell";
 import type { DashboardView } from "./components/DashboardShell";
 import { PatientPairingCard } from "./components/PatientPairingCard";
@@ -334,8 +335,7 @@ function App() {
   }
 
   if (path.startsWith("/onboarding")) {
-    window.location.replace("/live");
-    return null;
+    return <OnboardingFlow />;
   }
 
   if (path.startsWith("/live")) {
@@ -349,9 +349,13 @@ function App() {
 
   if (path.startsWith("/caregiver")) {
     const isDemo = initialQuery.get("demo") === "1";
-    if (!isDemo && !supabaseEnabled && !liveMode) {
-      window.location.replace("/live");
-      return null;
+    if (!isDemo && !supabaseEnabled) {
+      const storedHousehold = window.localStorage.getItem("safezone-household-id");
+      const completedHousehold = window.localStorage.getItem("safezone-setup-complete");
+      if (!storedHousehold || completedHousehold !== storedHousehold) {
+        window.location.replace("/onboarding");
+        return null;
+      }
     }
     return supabaseEnabled && !isDemo ? (
       <AuthGate>
@@ -1460,7 +1464,7 @@ function CaregiverView() {
       {demoMode || caregiverLiveMode ? (
         <section className="demo-director" aria-label="Guided demo controls">
           <div className="demo-director-copy">
-            <span className="demo-label"><i /> {caregiverLiveMode ? "Live tracker · No Supabase" : "Guided demo · Simulated movement"}</span>
+            <span className="demo-label"><i /> {caregiverLiveMode ? "Live tracker · Connected demo" : "Guided demo · Simulated movement"}</span>
             <strong>
               {demoStep === 0 && (caregiverLiveMode ? "Tracker ready — simulate or pair a phone" : "Ready to tell the SafeZone story")}
               {demoStep === 1 && "Mary is safe at home"}
