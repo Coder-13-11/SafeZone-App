@@ -1,4 +1,5 @@
 import type { GeofenceState, LocationPing } from "./types";
+import { STATE_CHIP_LABEL } from "./safetyLanguage";
 
 export type ConnectionState = "connecting" | "live" | "offline";
 export type CareConfidenceLevel = "excellent" | "good" | "attention" | "critical";
@@ -78,12 +79,12 @@ export function calculateCareConfidence(
     score >= 90 ? "excellent" : score >= 70 ? "good" : score >= 40 ? "attention" : "critical";
   const label =
     level === "excellent"
-      ? "All signals clear"
+      ? "High confidence"
       : level === "good"
-        ? "Mostly reliable"
+        ? "Reliable enough to act"
         : level === "attention"
           ? "Check tracking"
-          : "Current status uncertain";
+          : "Status uncertain";
   const summary =
     level === "excellent"
       ? "Location is recent, clear, and reporting normally."
@@ -100,37 +101,33 @@ export function calculateCareConfidence(
     summary,
     details: [
       {
-        label: "Last update",
+        label: "GPS",
+        value: ping.accuracy ? (accuracy <= 12 ? "Strong" : accuracy <= 35 ? "Good" : "Approximate") : "Unknown",
+        healthy: accuracy <= 35
+      },
+      {
+        label: "Freshness",
         value: relativeUpdate(ping.timestamp),
         healthy: ageSeconds <= 60
       },
       {
-        label: "Location clarity",
-        value: ping.accuracy ? `About ${Math.round(ping.accuracy)} m` : "Unknown",
+        label: "Accuracy",
+        value: ping.accuracy ? `±${Math.round(ping.accuracy)} m` : "Unknown",
         healthy: accuracy <= 35
       },
       {
-        label: "Dashboard connection",
-        value: connection === "live" ? "Online" : "Reconnecting",
+        label: "Internet",
+        value: connection === "live" ? "Stable" : "Reconnecting",
         healthy: connection === "live"
       },
       {
-        label: "Patient device",
-        value: battery === null ? "Battery unavailable" : `${battery}% battery`,
+        label: "Battery",
+        value: battery === null ? "Unavailable" : `${battery}%`,
         healthy: battery === null || battery >= 25
       },
       {
-        label: "Movement status",
-        value:
-          state === "safe"
-            ? "Inside Home Zone"
-            : state === "caution"
-              ? "Near boundary"
-              : state === "alert"
-                ? "Outside Home Zone"
-                : state === "grace"
-                  ? "Checking boundary"
-                  : "Not established",
+        label: "Safety state",
+        value: STATE_CHIP_LABEL[state],
         healthy: state === "safe"
       }
     ]

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { SafeZoneMark } from "./WelcomeView";
+import { caregiverHref } from "../safetyLanguage";
 
 export type DashboardView = "overview" | "map" | "activity" | "family" | "settings";
 
@@ -16,18 +17,22 @@ export function DashboardShell({
   caregiverName,
   patientName,
   connected,
+  demoMode,
+  householdId,
   children
 }: {
   activeView: DashboardView;
   caregiverName: string;
   patientName: string;
   connected: boolean;
+  demoMode?: boolean;
+  householdId?: string;
   children: ReactNode;
 }) {
   const titles: Record<DashboardView, { eyebrow: string; title: string }> = {
     overview: { eyebrow: caregiverName ? `Welcome back, ${caregiverName}` : "Welcome back", title: `${patientName} at a glance` },
     map: { eyebrow: "Live location", title: `Where ${patientName} is now` },
-    activity: { eyebrow: "Care history", title: "Meaningful activity" },
+    activity: { eyebrow: "Care history", title: "Emergency timeline" },
     family: { eyebrow: "Shared care", title: "Your care circle" },
     settings: { eyebrow: "Preferences", title: "SafeZone settings" }
   };
@@ -40,7 +45,7 @@ export function DashboardShell({
           {navigation.map((item) => (
             <a
               key={item.id}
-              href={`/caregiver${item.id === "overview" ? "" : `?view=${item.id}`}`}
+              href={caregiverHref(item.id === "overview" ? undefined : item.id, demoMode, householdId)}
               className={activeView === item.id ? "active" : ""}
               aria-current={activeView === item.id ? "page" : undefined}
             >
@@ -68,7 +73,7 @@ export function DashboardShell({
             <span className={`header-connection ${connected ? "connected" : ""}`}>
               <i /> {connected ? "Dashboard online" : "Reconnecting"}
             </span>
-            <a href="/caregiver?view=family" className="add-family-button">Care circle</a>
+            <a href={caregiverHref("family", demoMode, householdId)} className="add-family-button">Care circle</a>
           </div>
         </header>
         {children}

@@ -5,7 +5,8 @@ import {
   CareConfidenceCard,
   FamilyCoordinationCard,
   HumanTimeline,
-  SafetyHeroCard
+  SafetyHeroCard,
+  TrustSignalsCard
 } from "./components/CaregiverCards";
 import { WelcomeView } from "./components/WelcomeView";
 import { OnboardingFlow } from "./components/OnboardingFlow";
@@ -28,6 +29,7 @@ import {
   vapidPublicKey
 } from "./lib/supabase";
 import { subscribeToHousehold } from "./lib/realtime";
+import { STATE_CHIP_LABEL, caregiverHref } from "./safetyLanguage";
 import {
   applyLocationLocally,
   createGeofenceMemory
@@ -135,7 +137,7 @@ function humanSafetyCopy(
 
   if (isStale) {
     return {
-      eyebrow: "Needs attention",
+      eyebrow: "Signal is stale",
       headline: `${patientName}’s location is delayed`,
       detail: "The map shows the last location received, not necessarily where they are now.",
       reassurance: "Check that the patient phone is charged, online, and has SafeZone open."
@@ -144,25 +146,25 @@ function humanSafetyCopy(
 
   if (state === "alert") {
     return {
-      eyebrow: "Alert",
-      headline: `${patientName} is reported outside Home Zone`,
+      eyebrow: STATE_CHIP_LABEL.alert,
+      headline: `${patientName} needs attention — outside Home Zone`,
       detail: "Open the map to see the latest reported location, update time, and GPS accuracy.",
-      reassurance: "Subscribed caregivers were notified. Confirm who is responding below."
+      reassurance: "Family was notified. Tap “I’m responding” so everyone knows who is handling it."
     };
   }
 
   if (state === "grace") {
     return {
-      eyebrow: "Checking boundary",
-      headline: `${patientName} may have crossed the boundary`,
+      eyebrow: STATE_CHIP_LABEL.grace,
+      headline: `${patientName} may be leaving Home Zone`,
       detail: "SafeZone received a location outside Home Zone and is waiting briefly for another reading.",
-      reassurance: "No confirmed crossing alert has been sent yet."
+      reassurance: "No confirmed alert yet — this is the confirmation step before family is notified."
     };
   }
 
   if (state === "caution") {
     return {
-      eyebrow: "Near the edge",
+      eyebrow: STATE_CHIP_LABEL.caution,
       headline: `${patientName} is near the Home Zone boundary`,
       detail: "The latest reported location is close to the edge of the boundary.",
       reassurance: "This is an early heads-up, not a confirmed crossing."
@@ -179,10 +181,10 @@ function humanSafetyCopy(
   }
 
   return {
-    eyebrow: "Safe",
+    eyebrow: STATE_CHIP_LABEL.safe,
     headline: `${patientName} is inside Home Zone`,
     detail: "The latest location reported by the patient phone is inside the active boundary.",
-    reassurance: "Subscribed caregivers will be notified if a confirmed crossing is reported."
+    reassurance: "Family will be notified if a confirmed crossing is reported."
   };
 }
 
@@ -727,6 +729,7 @@ function CaregiverView() {
   const [confidenceExpanded, setConfidenceExpanded] = useState(false);
   const [demoStep, setDemoStep] = useState(0);
   const [demoRunning, setDemoRunning] = useState(false);
+  const [demoResolved, setDemoResolved] = useState(false);
   const [livePairUrl, setLivePairUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [profileStatus, setProfileStatus] = useState("");
@@ -1366,6 +1369,9 @@ function CaregiverView() {
     demoRunRef.current = runId;
     setDemoRunning(true);
     setDemoStep(1);
+    setDemoResolved(false);
+    setCareResponse(null);
+    setPresence([]);
     setError(null);
 
     const center = { lat: 37.7749, lng: -122.4194 };
@@ -1436,6 +1442,24 @@ function CaregiverView() {
           previousStateRef.current = evaluation.state;
         }
 
+        if (point.step === 4 && evaluation.state === "alert") {
+          setPresence([
+            { id: "demo-sarah", label: "Sarah" },
+            { id: "demo-mike", label: "Mike" },
+            { id: "demo-emma", label: "Emma" }
+          ]);
+          setCareResponse({
+            id: "demo-response",
+            caregiverLabel: "Sarah",
+            status: "responding",
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        if (point.step === 5 && evaluation.state === "safe") {
+          setDemoResolved(true);
+        }
+
         if (point.wait) await new Promise((resolve) => window.setTimeout(resolve, point.wait));
       }
     } catch (error) {
@@ -1462,6 +1486,8 @@ function CaregiverView() {
       caregiverName={caregiverLabel}
       patientName={patientName}
       connected={connectionState === "live"}
+      demoMode={demoMode}
+      householdId={householdId}
     >
       {demoMode || caregiverLiveMode ? (
         <section className="demo-director" aria-label="Guided demo controls">
@@ -1469,11 +1495,11 @@ function CaregiverView() {
             <span className="demo-label"><i /> {caregiverLiveMode ? "Live tracker · Connected demo" : "Guided demo · Simulated movement"}</span>
             <strong>
               {demoStep === 0 && (caregiverLiveMode ? "Tracker ready — simulate or pair a phone" : "Ready to tell the SafeZone story")}
-              {demoStep === 1 && "Mary is safe at home"}
-              {demoStep === 2 && "A gentle warning before danger"}
-              {demoStep === 3 && "SafeZone confirms the boundary crossing"}
-              {demoStep === 4 && "Family receives a clear action state"}
-              {demoStep === 5 && "Mary returns safely home"}
+              {demoStep === 1 && "Safe — Mary is at home"}
+              {demoStep === 2 && "Near boundary — early warning"}
+              {demoStep === 3 && "Confirming exit — grace period"}
+              {demoStep === 4 && "Needs attention — family responding"}
+              {demoStep === 5 && "Resolved — returning to safe zone"}
             </strong>
           </div>
           <div className="demo-progress" aria-hidden="true">
@@ -1504,7 +1530,7 @@ function CaregiverView() {
             <strong>{safetyCopy.headline}</strong>
             {isLocationStale && (currentState === "alert" || currentState === "grace") ? <p>Last known state remains urgent, but the location is no longer current.</p> : null}
           </div>
-          <a href={presentedState === "unknown" && safetyCopy.headline.includes("Home Zone") ? "/caregiver?view=map" : "/caregiver"}>
+          <a href={caregiverHref(undefined, demoMode, householdId)}>
             {presentedState === "alert" || presentedState === "grace" ? "View location" : presentedState === "unknown" ? "Resolve setup" : "Open overview"}
           </a>
           {presentedState === "alert" && !careResponse ? <button type="button" onClick={acknowledgeResponse}>I’m responding</button> : null}
@@ -1518,7 +1544,7 @@ function CaregiverView() {
             <article><span className="metric-symbol">◷</span><div><small>Location updates</small><strong>{history.length}</strong><p>In this retained session</p></div></article>
           </section>
           <div className="activity-layout">
-            <HumanTimeline history={history} />
+            <HumanTimeline history={history} response={careResponse} />
             <section className="dashboard-card insight-card">
               <div className="dashboard-card-heading"><div><span>Pattern summary</span><h2>What SafeZone observed</h2></div></div>
               <div className="insight-hero"><span>{safePercentage || "—"}{history.length ? "%" : ""}</span><p>of received updates were safely inside Home Zone.</p></div>
@@ -1537,6 +1563,8 @@ function CaregiverView() {
               currentCaregiver={caregiverLabel}
               alertActive={currentState === "alert"}
               response={careResponse}
+              householdId={householdId}
+              demoMode={demoMode}
               onRespond={acknowledgeResponse}
             />
           </div>
@@ -1613,8 +1641,12 @@ function CaregiverView() {
           accuracyM={livePing?.accuracy ?? null}
           graceEndsAt={livePing?.graceEndsAt || null}
           response={careResponse}
+          resolved={demoResolved}
+          demoMode={demoMode}
           onRespond={acknowledgeResponse}
         />
+
+        <TrustSignalsCard ping={livePing} connection={connectionState} connectionLabel={connectionLabel} />
 
         <CareConfidenceCard
           confidence={careConfidence}
@@ -1656,12 +1688,14 @@ function CaregiverView() {
           <p className="presence-badge">{otherViewers.map((viewer) => viewer.label).join(", ")} is also watching.</p>
         ) : null}
 
-        <HumanTimeline history={history} />
+        <HumanTimeline history={history} response={careResponse} />
         <FamilyCoordinationCard
           viewers={presence}
           currentCaregiver={caregiverLabel}
           alertActive={currentState === "alert"}
           response={careResponse}
+          householdId={householdId}
+          demoMode={demoMode}
           onRespond={acknowledgeResponse}
         />
 

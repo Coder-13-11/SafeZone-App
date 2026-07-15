@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { animate, createTimeline } from "animejs";
 
 export function SafeZoneMark() {
   return (
@@ -10,107 +11,155 @@ export function SafeZoneMark() {
   );
 }
 
-const demoMoments = [
+const heroMoments = [
   {
     state: "safe",
-    label: "INSIDE HOME ZONE",
-    title: "Mary’s latest location is at home",
-    detail: "Updated just now · about 7 m accuracy",
-    note: "Everything looks good based on the latest phone update."
+    label: "Safe",
+    title: "Mary is inside Home Zone",
+    detail: "Updated just now · ±7 m",
+    dot: { left: "42%", top: "54%" },
+    ring: 28
   },
   {
     state: "approaching",
-    label: "APPROACHING",
-    title: "Mary is near the boundary",
-    detail: "A live dashboard warning before a confirmed crossing",
-    note: "No push alert yet. Connected dashboards show the early warning."
+    label: "Near Boundary",
+    title: "Mary is near the edge",
+    detail: "Early warning — no alert yet",
+    dot: { left: "58%", top: "46%" },
+    ring: 32
   },
   {
     state: "alert",
-    label: "ACTION NEEDED",
-    title: "Mary has left Home Zone",
-    detail: "Boundary crossing confirmed",
-    note: "Every caregiver receives one clear, shared alert."
+    label: "Needs Attention",
+    title: "Mary left Home Zone",
+    detail: "Family notified · location approximate",
+    dot: { left: "74%", top: "38%" },
+    ring: 40
   },
   {
     state: "responding",
-    label: "FAMILY RESPONDING",
+    label: "Family Responding",
     title: "Sarah is taking care of it",
-    detail: "Mike and Emma can see the response",
-    note: "No duplicate calls. No frantic group-text thread."
+    detail: "Mike and Emma can see who’s handling it",
+    dot: { left: "74%", top: "38%" },
+    ring: 40
   }
 ] as const;
 
-function LiveProductDemo() {
+function PhoneHeroMockup() {
   const [moment, setMoment] = useState(0);
-  const [playing, setPlaying] = useState(true);
+  const phoneRef = useRef<HTMLDivElement | null>(null);
+  const dotRef = useRef<HTMLDivElement | null>(null);
+  const ringRef = useRef<HTMLDivElement | null>(null);
+  const statusRef = useRef<HTMLDivElement | null>(null);
+  const boundaryRef = useRef<HTMLDivElement | null>(null);
+  const introPlayed = useRef(false);
+
+  const current = heroMoments[moment];
 
   useEffect(() => {
-    if (!playing) return;
+    const phone = phoneRef.current;
+    const dot = dotRef.current;
+    const status = statusRef.current;
+    if (!phone || !dot || !status || introPlayed.current) return;
+    introPlayed.current = true;
+
+    const timeline = createTimeline({ defaults: { ease: "out(3)" } });
+    timeline
+      .add(phone, { opacity: [0, 1], translateY: [36, 0], duration: 900 })
+      .add(dot, { scale: [0.6, 1], opacity: [0, 1], duration: 700 }, 200)
+      .add(status, { opacity: [0, 1], translateY: [18, 0], duration: 650 }, 350);
+  }, []);
+
+  useEffect(() => {
+    const dot = dotRef.current;
+    const ring = ringRef.current;
+    const status = statusRef.current;
+    const boundary = boundaryRef.current;
+    if (!dot || !ring || !status || !boundary) return;
+
+    animate(dot, {
+      left: current.dot.left,
+      top: current.dot.top,
+      duration: 1100,
+      ease: "out(3)"
+    });
+
+    animate(ring, {
+      width: `${current.ring * 2}px`,
+      height: `${current.ring * 2}px`,
+      duration: 900,
+      ease: "out(2)"
+    });
+
+    animate(status, {
+      opacity: [0.35, 1],
+      translateY: [10, 0],
+      duration: 450,
+      ease: "out(2)"
+    });
+
+    animate(boundary, {
+      scale: current.state === "alert" || current.state === "responding" ? [1, 1.03, 1] : 1,
+      duration: current.state === "alert" ? 700 : 0,
+      ease: "out(2)"
+    });
+  }, [current]);
+
+  useEffect(() => {
     const interval = window.setInterval(() => {
-      setMoment((current) => (current + 1) % demoMoments.length);
-    }, 3200);
+      setMoment((value) => (value + 1) % heroMoments.length);
+    }, 3400);
     return () => window.clearInterval(interval);
-  }, [playing]);
-
-  const current = demoMoments[moment];
-
-  function playFromStart() {
-    setMoment(0);
-    setPlaying(true);
-    document.getElementById("live-product-demo")?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
+  }, []);
 
   return (
-    <div className="landing-demo-wrap" id="live-product-demo">
-      <div className="landing-demo-chrome">
-        <span><i /> LIVE PRODUCT STORY</span>
-        <span>Simulated movement · Real SafeZone states</span>
-        <button type="button" onClick={() => setPlaying((value) => !value)}>
-          {playing ? "Pause" : "Play"}
-        </button>
-      </div>
-      <div className={`landing-live-demo demo-${current.state}`}>
-        <div className="landing-map-scene">
-          <div className="street-grid" aria-hidden="true" />
-          <div className="demo-home-label"><span>⌂</span><strong>Home Zone</strong></div>
-          <div className="demo-boundary" aria-hidden="true" />
-          <div className="demo-trail" aria-hidden="true" />
-          <div className="demo-person-dot" aria-label="Mary’s simulated location">
-            <span>MJ</span>
-            <i />
+    <div className="phone-hero-stage" aria-label="SafeZone product preview">
+      <div className={`phone-mockup phone-state-${current.state}`} ref={phoneRef}>
+        <div className="phone-notch" aria-hidden="true" />
+        <div className="phone-screen">
+          <div className="phone-topbar">
+            <span>SafeZone</span>
+            <span className="phone-live-pill">● Live</span>
           </div>
-          <div className="map-honesty-pill">◎ Accuracy radius shown</div>
-        </div>
-        <div className="landing-status-panel">
-          <div className="demo-person-row">
-            <span className="demo-avatar">MJ</span>
-            <div><small>YOUR LOVED ONE</small><strong>Mary Johnson</strong></div>
-            <span className="demo-live-dot">● Live</span>
+          <div className="phone-map">
+            <div className="phone-map-grid" aria-hidden="true" />
+            <div className={`phone-boundary phone-boundary-${current.state}`} ref={boundaryRef} aria-hidden="true" />
+            <div className="phone-home" aria-hidden="true">
+              <span>⌂</span>
+            </div>
+            <div className="phone-accuracy-ring" ref={ringRef} aria-hidden="true" />
+            <div className="phone-dot" ref={dotRef} aria-label="Mary's location">
+              <span>MJ</span>
+            </div>
           </div>
-          <div className="demo-status-copy" key={current.state}>
-            <span className="demo-state-icon" aria-hidden="true">
-              {current.state === "safe" ? "✓" : current.state === "approaching" ? "…" : current.state === "alert" ? "!" : "↗"}
-            </span>
-            <small>{current.label}</small>
+          <div className="phone-status" ref={statusRef} key={current.state}>
+            <span className={`phone-status-chip chip-${current.state}`}>{current.label}</span>
             <h3>{current.title}</h3>
             <p>{current.detail}</p>
           </div>
-          <div className="demo-reassurance">{current.note}</div>
-          <div className="demo-moment-nav" aria-label="Demo moments">
-            {demoMoments.map((item, index) => (
-              <button
-                type="button"
-                key={item.state}
-                onClick={() => { setMoment(index); setPlaying(false); }}
-                className={moment === index ? "active" : ""}
-                aria-label={`Show ${item.label.toLowerCase()} state`}
-              />
-            ))}
-          </div>
+          {current.state === "responding" ? (
+            <div className="phone-family-banner">
+              <span>S</span>
+              <div>
+                <strong>Sarah is responding</strong>
+                <span>Mike viewing · Emma notified</span>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
-      <button type="button" className="replay-story-button" onClick={playFromStart}>Replay product story</button>
+      <div className="phone-moment-dots" aria-hidden="true">
+        {heroMoments.map((item, index) => (
+          <button
+            key={item.state}
+            type="button"
+            className={moment === index ? "active" : ""}
+            onClick={() => setMoment(index)}
+            aria-label={`Show ${item.label}`}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -122,80 +171,49 @@ export function WelcomeView() {
         <a href="/" className="brand-lockup"><SafeZoneMark /><span>SafeZone</span></a>
         <div className="story-nav-links">
           <a href="#how-it-works">How it works</a>
-          <a href="#care-confidence">Care Confidence</a>
-          <a href="/live">Live tracker</a>
+          <a href="#family">Family response</a>
           <a href="/caregiver?demo=1">Demo</a>
         </div>
-        <a href="/onboarding" className="story-nav-cta">Start tracking</a>
+        <a href="/caregiver?demo=1" className="story-nav-cta">Watch demo</a>
       </nav>
 
-      <section className="story-hero">
-        <div className="story-hero-copy">
-          <p className="story-kicker"><span /> A calmer way to care</p>
-          <h1>Know they’re safe.<br /><em>Before worry takes over.</em></h1>
-          <p>
-            SafeZone turns two phones your family already owns into a shared safety net for dementia care—without expensive trackers or complicated dashboards.
-          </p>
-          <div className="story-actions">
-            <a href="/onboarding" className="primary-story-cta">Start tracking <span>→</span></a>
-            <a href="/live" className="secondary-story-cta"><span>▶</span> Open live tracker</a>
-          </div>
-          <div className="hero-trust">
-            <span>✓ No special hardware</span>
-            <span>✓ Free web platform</span>
-            <span>✓ GPS accuracy always visible</span>
-          </div>
+      <section className="landing-hero-simple">
+        <p className="landing-eyebrow">Family safety coordination for dementia care</p>
+        <h1>Helping families know when a loved one needs them.</h1>
+        <PhoneHeroMockup />
+        <div className="landing-hero-cta">
+          <a href="/caregiver?demo=1" className="primary-story-cta">Watch the live demo <span>→</span></a>
+          <a href="/onboarding" className="secondary-story-cta">Set up your care circle</a>
         </div>
-        <div className="hero-visual">
-          <div className="hero-orbit orbit-a" />
-          <div className="hero-orbit orbit-b" />
-          <div className="hero-center-mark"><SafeZoneMark /></div>
-          <div className="hero-family-node node-caregiver"><span>S</span><strong>Sarah</strong><small>Caregiver</small></div>
-          <div className="hero-family-node node-patient"><span>M</span><strong>Mary</strong><small>Safe at home</small></div>
-          <div className="hero-signal signal-one">Location current</div>
-          <div className="hero-signal signal-two">Family connected</div>
-          <svg viewBox="0 0 600 600" aria-hidden="true">
-            <path d="M110 350C178 240 220 155 302 150s135 90 190 190" />
-            <path d="M122 370c87 84 132 110 207 74 66-32 84-92 155-112" />
-          </svg>
-        </div>
+        <p className="landing-scroll-cue" aria-hidden="true">Scroll to see how it works</p>
       </section>
 
       <section className="proof-ribbon" aria-label="SafeZone product principles">
-        <div><strong>At a glance</strong><span>understand the current safety state</span></div>
-        <div><strong>2 devices</strong><span>using phones your family already owns</span></div>
-        <div><strong>1 shared truth</strong><span>for every connected caregiver</span></div>
-        <div><strong>0 false precision</strong><span>real GPS accuracy stays visible</span></div>
-      </section>
-
-      <section className="demo-story-section">
-        <div className="story-section-heading">
-          <p className="story-kicker"><span /> See the product, not a promise</p>
-          <h2>From reassurance to action.<br />Without the panic in between.</h2>
-          <p>This demonstration is simulated and clearly labeled. Every state mirrors the real server-side safety flow.</p>
-        </div>
-        <LiveProductDemo />
+        <div><strong>At a glance</strong><span>one clear safety state</span></div>
+        <div><strong>2 phones</strong><span>no special hardware</span></div>
+        <div><strong>1 response</strong><span>who is handling it</span></div>
+        <div><strong>0 false precision</strong><span>GPS accuracy always shown</span></div>
       </section>
 
       <section className="reassurance-scene" id="care-confidence">
         <div className="scene-copy">
           <span className="scene-number">01</span>
-          <p className="story-kicker dark"><span /> Reassurance first</p>
-          <h2>The first three seconds matter most.</h2>
-          <p>Caregivers should never interpret coordinates, battery numbers, and connection logs just to answer one human question.</p>
+          <p className="story-kicker dark"><span /> Peace of mind first</p>
+          <h2>Confidence, not coordinates.</h2>
+          <p>Families shouldn’t decode GPS logs to answer one human question: are they okay?</p>
           <ul>
-            <li><span>✓</span><div><strong>One clear safety sentence</strong><p>“Mary is inside Home Zone.”</p></div></li>
-            <li><span>✓</span><div><strong>One confidence signal</strong><p>Freshness, accuracy, connection, and battery become understandable.</p></div></li>
-            <li><span>✓</span><div><strong>Details only when requested</strong><p>The technology stays available without becoming the experience.</p></div></li>
+            <li><span>✓</span><div><strong>One sentence</strong><p>“Mary is inside Home Zone.”</p></div></li>
+            <li><span>✓</span><div><strong>One confidence score</strong><p>GPS, freshness, battery, and connection in plain language.</p></div></li>
+            <li><span>✓</span><div><strong>Honest accuracy</strong><p>Location is approximate — always visible on the map.</p></div></li>
           </ul>
         </div>
         <div className="confidence-art">
           <div className="confidence-halo halo-1" />
           <div className="confidence-halo halo-2" />
-          <div className="confidence-core"><span>✓</span><small>TRACKING<br />HEALTH</small></div>
-          <div className="confidence-signal signal-fresh"><i />Location fresh<strong>just now</strong></div>
-          <div className="confidence-signal signal-clear"><i />GPS clarity<strong>about 7 m</strong></div>
-          <div className="confidence-signal signal-device"><i />Patient device<strong>84% battery</strong></div>
+          <div className="confidence-core"><span>97%</span><small>CONFIDENCE</small></div>
+          <div className="confidence-signal signal-fresh"><i />GPS<strong>Strong</strong></div>
+          <div className="confidence-signal signal-clear"><i />Updated<strong>5 sec ago</strong></div>
+          <div className="confidence-signal signal-device"><i />Battery<strong>84%</strong></div>
         </div>
       </section>
 
@@ -206,17 +224,14 @@ export function WelcomeView() {
           <span className="boundary-ring ring-inner" />
           <span className="boundary-house">⌂</span>
           <span className="boundary-person">M</span>
-          <div className="boundary-callout"><small>GENTLE HEADS-UP</small><strong>Mary is approaching the boundary</strong><p>No emergency alert yet.</p></div>
+          <div className="boundary-callout"><small>NEAR BOUNDARY</small><strong>Mary is approaching the edge</strong><p>No emergency alert yet.</p></div>
         </div>
         <div className="scene-copy light">
           <span className="scene-number">02</span>
           <p className="story-kicker"><span /> Thoughtful escalation</p>
-          <h2>A warning before the emergency.</h2>
-          <p>Binary alerts create panic and fatigue. SafeZone uses a deliberate escalation curve designed around what the family needs next.</p>
-          <div className="escalation-steps">
-            <div><span>1</span><strong>Approaching</strong><p>A quiet cue near the edge.</p></div>
-            <div><span>2</span><strong>Confirming</strong><p>A short grace period avoids false alarms.</p></div>
-            <div><span>3</span><strong>Alert</strong><p>A clear action state shared with family.</p></div>
+          <h2>Warning before panic.</h2>
+          <div className="escalation-ladder">
+            <span>Safe</span><span>↓</span><span>Near Boundary</span><span>↓</span><span>Confirming Exit</span><span>↓</span><span>Needs Attention</span><span>↓</span><span>Family Responding</span><span>↓</span><span>Resolved</span>
           </div>
         </div>
       </section>
@@ -225,9 +240,9 @@ export function WelcomeView() {
         <div className="scene-copy">
           <span className="scene-number">03</span>
           <p className="story-kicker dark"><span /> One care circle</p>
-          <h2>One alert. One person responding. Everyone informed.</h2>
-          <p>SafeZone replaces uncertainty and duplicate calls with a single shared response state.</p>
-          <a href="/onboarding">Create your care circle <span>→</span></a>
+          <h2>One alert. One responder. Everyone aligned.</h2>
+          <p>Share one link in the family group chat — everyone joins the same care circle.</p>
+          <a href="/caregiver?demo=1">Watch the live demo <span>→</span></a>
         </div>
         <div className="family-response-art">
           <div className="response-alert"><span>!</span><div><small>SAFEZONE ALERT</small><strong>Mary has left Home Zone</strong><p>2 minutes ago</p></div></div>
@@ -243,35 +258,12 @@ export function WelcomeView() {
       <section className="how-scene" id="how-it-works">
         <div className="story-section-heading compact">
           <p className="story-kicker"><span /> Start in minutes</p>
-          <h2>One path. Three human steps.</h2>
-          <p>No account maze. No second setup choice. No technical vocabulary.</p>
+          <h2>Three steps. No maze.</h2>
         </div>
         <div className="how-steps">
-          <article><span>01</span><div className="how-icon">♡</div><h3>Tell us who you care for</h3><p>Add your name and your loved one’s name so every message is immediately understandable.</p></article>
-          <article><span>02</span><div className="how-icon">⌂</div><h3>Confirm Home Zone</h3><p>SafeZone proposes a boundary from your location. Adjust it, see the accuracy, and confirm.</p></article>
-          <article><span>03</span><div className="how-icon">⌁</div><h3>Scan once to connect</h3><p>Use the patient phone to scan a secure, expiring QR code. Location sharing begins only after consent.</p></article>
-        </div>
-      </section>
-
-      <section className="dashboard-story">
-        <div className="story-section-heading compact">
-          <p className="story-kicker"><span /> Caregiver visibility</p>
-          <h2>Everything important.<br />Nothing that creates more work.</h2>
-        </div>
-        <div className="dashboard-showcase">
-          <aside>
-            <div className="showcase-brand"><SafeZoneMark /> SafeZone</div>
-            <span className="active">⌂ Overview</span><span>◎ Live Map</span><span>↗ Activity</span><span>♧ Family</span><span>⚙ Settings</span>
-          </aside>
-          <div className="showcase-main">
-            <div className="showcase-header"><div><small>WELCOME BACK, SARAH</small><strong>Mary at a glance</strong></div><span>● Live</span></div>
-            <div className="showcase-grid">
-              <div className="showcase-safety"><small>INSIDE HOME ZONE</small><strong>Mary’s latest location is at home</strong><p>Subscribed caregivers will be notified if a confirmed crossing is reported.</p></div>
-              <div className="showcase-confidence"><span>✓</span><div><small>TRACKING HEALTH</small><strong>All signals clear</strong><p>Location is recent and reporting normally.</p></div></div>
-              <div className="showcase-map"><span className="showcase-zone" /><span className="showcase-dot">M</span><small>Home Zone</small></div>
-              <div className="showcase-family"><small>FAMILY</small><strong>2 caregivers connected</strong><div><span>S</span><span>M</span></div></div>
-            </div>
-          </div>
+          <article><span>01</span><div className="how-icon">♡</div><h3>Add names</h3><p>So every alert is immediately human.</p></article>
+          <article><span>02</span><div className="how-icon">⌂</div><h3>Set Home Zone</h3><p>One boundary around where home feels safe.</p></article>
+          <article><span>03</span><div className="how-icon">⌁</div><h3>Scan & share</h3><p>Pair the patient phone, then share the family link.</p></article>
         </div>
       </section>
 
@@ -281,19 +273,16 @@ export function WelcomeView() {
           <h2>Questions families ask first.</h2>
         </div>
         <div className="faq-list">
-          <details><summary>How accurate is SafeZone?</summary><p>SafeZone uses the patient phone’s browser-provided GPS. Modern devices may reach roughly 3–8 meters outdoors, but accuracy worsens near buildings and indoors. The real accuracy radius is always shown.</p></details>
-          <details><summary>Does the patient need a special tracker?</summary><p>No. SafeZone uses a phone the family already owns. The patient device is connected through one secure, expiring QR code.</p></details>
-          <details><summary>Will it work when the browser is closed?</summary><p>Web Push can deliver alerts after setup, but browser background location is constrained by each operating system. SafeZone does not claim native-app background guarantees.</p></details>
-          <details><summary>Can several family members watch together?</summary><p>Yes. Caregivers can see who is viewing and who has taken responsibility during an alert.</p></details>
+          <details><summary>How accurate is SafeZone?</summary><p>SafeZone uses browser GPS. The real accuracy radius is always shown — often ±7 m outdoors, wider near buildings.</p></details>
+          <details><summary>Does the patient need a special tracker?</summary><p>No. A phone your family already owns, connected with one secure QR code.</p></details>
+          <details><summary>Can several family members watch together?</summary><p>Yes. Share one invite link. Everyone sees who is responding.</p></details>
         </div>
       </section>
 
       <section className="final-story-cta">
         <SafeZoneMark />
-        <p className="story-kicker"><span /> A little less worry starts here</p>
-        <h2>Give your family one shared sense of calm.</h2>
-        <p>Set up SafeZone using the devices you already own.</p>
-        <a href="/onboarding">Start tracking <span>→</span></a>
+        <h2>Peace of mind before an emergency happens.</h2>
+        <a href="/caregiver?demo=1">Watch the demo <span>→</span></a>
       </section>
 
       <footer className="story-footer">
