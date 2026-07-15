@@ -172,9 +172,9 @@ export function WelcomeView() {
         <div className="story-nav-links">
           <a href="#how-it-works">How it works</a>
           <a href="#family">Family response</a>
-          <a href="/caregiver?demo=1">Demo</a>
+          <a href="#questions">FAQ</a>
         </div>
-        <a href="/caregiver?demo=1" className="story-nav-cta">Watch demo</a>
+        <a href="/onboarding" className="story-nav-cta">Try SafeZone</a>
       </nav>
 
       <section className="landing-hero-simple">
@@ -182,8 +182,8 @@ export function WelcomeView() {
         <h1>Helping families know when a loved one needs them.</h1>
         <PhoneHeroMockup />
         <div className="landing-hero-cta">
-          <a href="/caregiver?demo=1" className="primary-story-cta">Watch the live demo <span>→</span></a>
-          <a href="/onboarding" className="secondary-story-cta">Set up your care circle</a>
+          <a href="/onboarding" className="primary-story-cta">Try SafeZone <span>→</span></a>
+          <a href="#how-it-works" className="secondary-story-cta">See how it works</a>
         </div>
         <p className="landing-scroll-cue" aria-hidden="true">Scroll to see how it works</p>
       </section>
@@ -242,16 +242,16 @@ export function WelcomeView() {
           <p className="story-kicker dark"><span /> One care circle</p>
           <h2>One alert. One responder. Everyone aligned.</h2>
           <p>Share one link in the family group chat — everyone joins the same care circle.</p>
-          <a href="/caregiver?demo=1">Watch the live demo <span>→</span></a>
+          <a href="/onboarding">Create your care circle <span>→</span></a>
         </div>
         <div className="family-response-art">
           <div className="response-alert"><span>!</span><div><small>SAFEZONE ALERT</small><strong>Mary has left Home Zone</strong><p>2 minutes ago</p></div></div>
           <div className="response-family">
-            <div><span className="response-avatar sage">S</span><p><strong>Sarah</strong>Responding now</p><i className="active" /></div>
-            <div><span className="response-avatar gold">M</span><p><strong>Mike</strong>Currently viewing</p><i /></div>
+            <div><span className="response-avatar sage">S</span><p><strong>Sarah</strong>I’m going</p><i className="active" /></div>
+            <div><span className="response-avatar gold">M</span><p><strong>Mike</strong>I can’t</p><i /></div>
             <div><span className="response-avatar blue">E</span><p><strong>Emma</strong>Alert delivered</p><i /></div>
           </div>
-          <div className="response-confirmed">✓ Sarah is taking care of it</div>
+          <div className="response-confirmed">✓ Sarah is responding</div>
         </div>
       </section>
 
@@ -282,13 +282,13 @@ export function WelcomeView() {
       <section className="final-story-cta">
         <SafeZoneMark />
         <h2>Peace of mind before an emergency happens.</h2>
-        <a href="/caregiver?demo=1">Watch the demo <span>→</span></a>
+        <a href="/onboarding">Try SafeZone <span>→</span></a>
       </section>
 
       <footer className="story-footer">
         <div className="brand-lockup"><SafeZoneMark /><span>SafeZone</span></div>
         <p>Built with care for families navigating dementia.</p>
-        <div><a href="#questions">Safety & accuracy</a><a href="/caregiver?demo=1">Presentation mode</a></div>
+        <div><a href="#questions">Safety & accuracy</a><a href="/onboarding">Get started</a></div>
       </footer>
     </main>
   );

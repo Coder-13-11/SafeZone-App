@@ -207,7 +207,33 @@ Deno.serve(async (request) => {
       body: JSON.stringify({
         householdId,
         title: "SafeZone alert",
-        body: `${household.patient_name} is reported outside Home Zone.`,
+        body: `${household.patient_name} left Home Zone`,
+        url: `/caregiver?household=${encodeURIComponent(householdId)}`
+      })
+    }).catch(() => null);
+  }
+
+  const returnedHome =
+    (evaluation.state === "safe" || evaluation.state === "caution") &&
+    (evaluation.previousState === "alert" || evaluation.previousState === "grace");
+
+  if (returnedHome) {
+    await supabase
+      .from("care_responses")
+      .update({ resolved_at: now.toISOString() })
+      .eq("household_id", householdId)
+      .is("resolved_at", null);
+
+    await fetch(`${supabaseUrl}/functions/v1/send_push`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceRoleKey}`
+      },
+      body: JSON.stringify({
+        householdId,
+        title: "SafeZone update",
+        body: `${household.patient_name} is back · Resolved`,
         url: `/caregiver?household=${encodeURIComponent(householdId)}`
       })
     }).catch(() => null);

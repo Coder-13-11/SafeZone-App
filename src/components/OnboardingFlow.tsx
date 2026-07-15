@@ -373,7 +373,7 @@ export function OnboardingFlow() {
     window.localStorage.setItem("safezone-patient-name", patientName.trim());
     window.localStorage.setItem("safezone-setup-complete", household.id);
     window.localStorage.removeItem("safezone-onboarding-draft");
-    window.location.assign(`/caregiver?household=${household.id}`);
+    window.location.assign(`/caregiver?household=${household.id}&practice=1`);
   }
 
     return (
@@ -382,7 +382,6 @@ export function OnboardingFlow() {
       <nav className="onboarding-nav">
         <a href="/" className="brand-lockup"><SafeZoneMark /><span>SafeZone</span></a>
         <span>Family setup</span>
-        <a href="/caregiver?demo=1" className="onboarding-demo-link">Try presentation demo</a>
         <button type="button" className="onboarding-exit" onClick={() => window.location.assign("/")}>Exit</button>
       </nav>
 

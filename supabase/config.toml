@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.send_push]
 verify_jwt = false
+
+[functions.submit_care_response]
+verify_jwt = true

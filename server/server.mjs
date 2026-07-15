@@ -559,22 +559,44 @@ app.post("/api/subscribe", (req, res) => {
 app.post("/api/respond", (req, res) => {
   const household = getHousehold(req.body.householdId || defaultHouseholdId);
   const action = req.body.action;
+  const caregiverLabel = req.body.caregiverLabel || "Caregiver";
 
-  if (!["acknowledge", "request_help", "clear"].includes(action)) {
+  if (!["acknowledge", "going", "cant", "takeover", "request_help", "clear"].includes(action)) {
     return res.status(400).json({ error: "Unknown care response action." });
   }
 
+  household.careDeclines = household.careDeclines || [];
+
   if (action === "clear") {
     household.careResponse = null;
+    household.careDeclines = [];
+  } else if (action === "cant") {
+    const decline = {
+      id: randomUUID(),
+      caregiverLabel,
+      status: "declined",
+      timestamp: nowIso(),
+      resolvedAt: null
+    };
+    household.careDeclines = [decline, ...household.careDeclines].slice(0, 10);
+    broadcast(household, { type: "care_declines", declines: household.careDeclines });
+    persistence.schedule(households);
+    return res.json({ ok: true, response: decline });
   } else {
     household.careResponse = {
       id: randomUUID(),
       caregiverLabel:
         action === "request_help"
           ? household.patientName
-          : req.body.caregiverLabel || "Caregiver",
-      status: action === "request_help" ? "help_requested" : "responding",
-      timestamp: nowIso()
+          : caregiverLabel,
+      status:
+        action === "request_help"
+          ? "help_requested"
+          : action === "takeover"
+            ? "takeover"
+            : "responding",
+      timestamp: nowIso(),
+      resolvedAt: null
     };
   }
 
@@ -655,9 +677,11 @@ app.post("/api/location", async (req, res) => {
       timestamp
     });
 
-    if ((geofence.state === "safe" || geofence.state === "caution") && household.careResponse) {
+    if ((geofence.state === "safe" || geofence.state === "caution") && (household.careResponse || (household.careDeclines || []).length)) {
       household.careResponse = null;
+      household.careDeclines = [];
       broadcast(household, { type: "care_response", response: null });
+      broadcast(household, { type: "care_declines", declines: [] });
       persistence.schedule(households);
     }
   }

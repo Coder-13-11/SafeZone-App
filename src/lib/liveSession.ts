@@ -13,6 +13,7 @@ export type LiveHousehold = {
   history: LocationPing[];
   latest: LocationPing | null;
   response: CareResponse | null;
+  declines: CareResponse[];
 };
 
 type LiveEnvelope =
@@ -20,7 +21,8 @@ type LiveEnvelope =
   | { type: "location"; ping: LocationPing }
   | { type: "zones"; zones: Zone[] }
   | { type: "patient_paired"; pairedAt: string }
-  | { type: "care_response"; response: CareResponse }
+  | { type: "care_response"; response: CareResponse | null }
+  | { type: "care_declines"; declines: CareResponse[] }
   | { type: "profile"; patientName: string; caregiverName: string };
 
 const STORAGE_PREFIX = "safezone-live:";
@@ -61,7 +63,9 @@ export function readLiveHousehold(householdId: string): LiveHousehold | null {
   try {
     const raw = window.localStorage.getItem(storageKey(householdId));
     if (!raw) return null;
-    return JSON.parse(raw) as LiveHousehold;
+    const household = JSON.parse(raw) as LiveHousehold;
+    household.declines = household.declines || [];
+    return household;
   } catch {
     return null;
   }
@@ -95,7 +99,8 @@ export function createLiveHousehold(input?: {
     zones: [defaultZone(id, input?.center)],
     history: [],
     latest: null,
-    response: null
+    response: null,
+    declines: []
   };
   writeLiveHousehold(household);
   window.localStorage.setItem("safezone-household-id", id);
@@ -308,13 +313,34 @@ export function saveLiveZones(householdId: string, zones: Zone[]) {
   return { zones };
 }
 
-export function respondLive(householdId: string, caregiverLabel: string) {
+export function respondLive(
+  householdId: string,
+  caregiverLabel: string,
+  action: "going" | "cant" | "takeover" = "going"
+) {
   const household = readLiveHousehold(householdId) || ensureLiveHousehold(householdId);
+  household.declines = household.declines || [];
+
+  if (action === "cant") {
+    const decline: CareResponse = {
+      id: crypto.randomUUID(),
+      caregiverLabel,
+      status: "declined",
+      timestamp: new Date().toISOString(),
+      resolvedAt: null
+    };
+    household.declines = [decline, ...household.declines].slice(0, 10);
+    writeLiveHousehold(household);
+    publishLive(householdId, { type: "care_declines", declines: household.declines });
+    return decline;
+  }
+
   const response: CareResponse = {
     id: crypto.randomUUID(),
     caregiverLabel,
-    status: "responding",
-    timestamp: new Date().toISOString()
+    status: action === "takeover" ? "takeover" : "responding",
+    timestamp: new Date().toISOString(),
+    resolvedAt: null
   };
   household.response = response;
   writeLiveHousehold(household);

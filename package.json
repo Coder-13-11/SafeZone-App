@@ -12,7 +12,7 @@
     "preview": "npm run build && npm start",
     "vapid:generate": "node server/generate-vapid.mjs",
     "supabase:schema": "supabase db push",
-    "supabase:functions": "supabase functions deploy create_pairing && supabase functions deploy claim_pairing && supabase functions deploy ingest_location && supabase functions deploy send_push"
+    "supabase:functions": "supabase functions deploy create_pairing && supabase functions deploy claim_pairing && supabase functions deploy ingest_location && supabase functions deploy send_push && supabase functions deploy submit_care_response"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.2",

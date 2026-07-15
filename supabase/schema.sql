@@ -11,9 +11,12 @@ exception when duplicate_object then null;
 end $$;
 
 do $$ begin
-  create type public.care_response_status as enum ('responding', 'help_requested');
+  create type public.care_response_status as enum ('responding', 'help_requested', 'declined', 'takeover');
 exception when duplicate_object then null;
 end $$;
+
+alter type public.care_response_status add value if not exists 'declined';
+alter type public.care_response_status add value if not exists 'takeover';
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,

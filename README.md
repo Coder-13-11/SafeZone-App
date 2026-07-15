@@ -7,12 +7,14 @@ SafeZone is a browser-based safety app for families caring for someone with deme
 
 SafeZone does not claim room-level precision. The caregiver map always displays the GPS accuracy radius reported by the patient device.
 
-## Hackathon demo
+## Local development
 
 ```bash
 npm install
 npm run dev
 ```
+
+Open `/` → **Try SafeZone** → finish onboarding → complete the one-time **practice alert** on the real dashboard (`I’m going` / `I can’t` / `Take over`).
 
 ## Production build
 
@@ -168,16 +170,11 @@ Health check: `GET /api/health`
 
 ## Demo checklist
 
-1. Open the guided story on the presentation screen.
-2. Click **Start live story**.
-3. Narrate the progression:
-   - “SafeZone starts with reassurance, not a map.”
-   - “Care Confidence translates five technical signals into one understandable answer.”
-   - “A gentle warning appears before a true crossing.”
-   - “The server—not the browser—is the geofence source of truth.”
-   - “When an alert becomes real, family members can claim responsibility.”
-   - “The patient receives gentle positive feedback after returning safely.”
-4. Open `/patient` on a phone to demonstrate the real two-device flow.
+1. Open the landing page and click **Try SafeZone**.
+2. Complete real onboarding (names → Home Zone → QR pair → alerts).
+3. On the dashboard practice alert, tap **I’m going**, then show resolution.
+4. Share the care-circle invite link; open a second browser as another caregiver and show **I can’t** / **Take over**.
+5. Pair a patient phone and walk a real exit → alert → family response → return home.
 
 ## Important deployment notes
 

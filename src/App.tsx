@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { calculateCareConfidence } from "./careConfidence";
 import {
+  AlertDecisionActions,
   CareConfidenceCard,
   FamilyCoordinationCard,
   HumanTimeline,
@@ -16,14 +17,15 @@ import { PatientPairingCard } from "./components/PatientPairingCard";
 import { AuthGate } from "./components/AuthGate";
 import { CaregiverBootstrap } from "./components/CaregiverBootstrap";
 import {
-  acknowledgeResponse as acknowledgeSupabaseResponse,
   claimPairing as claimSupabasePairing,
   createOrUpdateHousehold as createOrUpdateSupabaseHousehold,
+  fetchCareCoordination as fetchSupabaseCareCoordination,
   fetchHistory as fetchSupabaseHistory,
   fetchZones as fetchSupabaseZones,
   getHouseholdProfile as getSupabaseHouseholdProfile,
   ingestLocation as ingestSupabaseLocation,
   saveZone as saveSupabaseZone,
+  submitCareResponse as submitSupabaseCareResponse,
   subscribePush as subscribeSupabasePush,
   supabaseEnabled,
   vapidPublicKey
@@ -50,6 +52,7 @@ import {
 import type {
   BatteryManagerLike,
   CareResponse,
+  CareResponseAction,
   GeofenceState,
   LatLngPoint,
   LocationPing,
@@ -149,7 +152,7 @@ function humanSafetyCopy(
       eyebrow: STATE_CHIP_LABEL.alert,
       headline: `${patientName} needs attention — outside Home Zone`,
       detail: "Open the map to see the latest reported location, update time, and GPS accuracy.",
-      reassurance: "Family was notified. Tap “I’m responding” so everyone knows who is handling it."
+      reassurance: "Family was notified. Tap I’m going, I can’t, or Take over so everyone knows who is handling it."
     };
   }
 
@@ -722,6 +725,8 @@ function CaregiverView() {
   const [replayIndex, setReplayIndex] = useState<number | null>(null);
   const [presence, setPresence] = useState<PresenceViewer[]>([]);
   const [careResponse, setCareResponse] = useState<CareResponse | null>(null);
+  const [careDeclines, setCareDeclines] = useState<CareResponse[]>([]);
+  const [careHistory, setCareHistory] = useState<CareResponse[]>([]);
   const [patientPairedAt, setPatientPairedAt] = useState<string | null>(null);
   const [pushStatus, setPushStatus] = useState("Push notifications are not set up on this device.");
   const [connectionState, setConnectionState] = useState<"connecting" | "live" | "offline">("connecting");
@@ -730,6 +735,14 @@ function CaregiverView() {
   const [demoStep, setDemoStep] = useState(0);
   const [demoRunning, setDemoRunning] = useState(false);
   const [demoResolved, setDemoResolved] = useState(false);
+  const practiceRequested = initialQuery.get("practice") === "1";
+  const [practiceStep, setPracticeStep] = useState<
+    "idle" | "intro" | "alert" | "responded" | "resolved" | "done"
+  >(() => {
+    if (!practiceRequested) return "idle";
+    if (window.localStorage.getItem("safezone-practice-complete") === householdId) return "done";
+    return "intro";
+  });
   const [livePairUrl, setLivePairUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [profileStatus, setProfileStatus] = useState("");
@@ -795,6 +808,16 @@ function CaregiverView() {
       const pairing = createLivePairing(household.id);
       setLivePairUrl(pairing.patientURL);
       return;
+    }
+
+    if (supabaseEnabled && householdId !== "demo-household") {
+      fetchSupabaseCareCoordination(householdId)
+        .then((coordination) => {
+          setCareResponse(coordination.active);
+          setCareDeclines(coordination.declines);
+          setCareHistory(coordination.history);
+        })
+        .catch(() => null);
     }
 
     (supabaseEnabled && householdId !== "demo-household"
@@ -934,10 +957,12 @@ function CaregiverView() {
             setSmoothedLocation({ lat: message.household.latest.lat, lng: message.household.latest.lng });
           }
           if (message.household.response) setCareResponse(message.household.response);
+          setCareDeclines(message.household.declines || []);
           return;
         }
         if (message.type === "zones") setZones(message.zones);
         if (message.type === "care_response") setCareResponse(message.response);
+        if (message.type === "care_declines") setCareDeclines(message.declines);
         if (message.type === "patient_paired") setPatientPairedAt(message.pairedAt);
         if (message.type === "location") {
           const evaluated = ingestLiveLocation(
@@ -972,6 +997,8 @@ function CaregiverView() {
         onStatus: setConnectionState,
         onZones: setZones,
         onCareResponse: setCareResponse,
+        onCareDeclines: setCareDeclines,
+        onCareHistory: setCareHistory,
         onPatientPaired: setPatientPairedAt,
         onLocation: (message) => {
           setLivePing(message);
@@ -980,6 +1007,13 @@ function CaregiverView() {
             return [...current.slice(-499), message];
           });
           setSmoothedLocation((current) => ema(current, { lat: message.lat, lng: message.lng }));
+          if (message.stateAtTime === "safe" || message.stateAtTime === "caution") {
+            if (previousStateRef.current === "alert" || previousStateRef.current === "grace") {
+              setCareResponse(null);
+              setCareDeclines([]);
+              setDemoResolved(true);
+            }
+          }
           if (message.stateAtTime !== previousStateRef.current) {
             handleStateChange(previousStateRef.current, message.stateAtTime);
             previousStateRef.current = message.stateAtTime;
@@ -1010,6 +1044,7 @@ function CaregiverView() {
         if (message.type === "hello" || message.type === "zones") setZones(message.zones);
         if (message.type === "presence") setPresence(message.viewers);
         if (message.type === "care_response") setCareResponse(message.response);
+        if (message.type === "care_declines") setCareDeclines(message.declines);
         if (message.type === "patient_paired") setPatientPairedAt(message.pairedAt);
 
         if (message.type === "profile" && !demoMode) {
@@ -1243,7 +1278,7 @@ function CaregiverView() {
       return;
     }
     if (demoMode) {
-      setProfileStatus("Presentation mode does not save profile changes.");
+      setProfileStatus("Sample mode does not save profile changes.");
       return;
     }
 
@@ -1340,28 +1375,108 @@ function CaregiverView() {
     }
   }
 
-  async function acknowledgeResponse() {
+  async function submitCareAction(action: CareResponseAction) {
     try {
       const response = caregiverLiveMode
-        ? respondLive(householdId, caregiverLabel)
+        ? respondLive(householdId, caregiverLabel, action)
         : supabaseEnabled
-        ? await acknowledgeSupabaseResponse(householdId, caregiverLabel)
-        : await fetch(apiUrl("/api/respond"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              householdId,
-              caregiverLabel,
-              action: "acknowledge"
-            })
-          }).then(async (response) => {
-            if (!response.ok) throw new Error("SafeZone could not share your response.");
-            return ((await response.json()) as { response: CareResponse }).response;
-          });
-      setCareResponse(response);
+          ? await submitSupabaseCareResponse(householdId, caregiverLabel, action)
+          : await fetch(apiUrl("/api/respond"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                householdId,
+                caregiverLabel,
+                action
+              })
+            }).then(async (result) => {
+              if (!result.ok) throw new Error("SafeZone could not share your response.");
+              return ((await result.json()) as { response: CareResponse }).response;
+            });
+
+      if (action === "cant") {
+        setCareDeclines((current) => [response, ...current.filter((item) => item.id !== response.id)]);
+        setCareHistory((current) => [response, ...current]);
+      } else {
+        setCareResponse(response);
+        setCareHistory((current) => [response, ...current]);
+      }
+
+      if (practiceStep === "alert" && action === "going") {
+        setPracticeStep("responded");
+        window.setTimeout(() => completePracticeReturn(), 1200);
+      }
     } catch (error) {
       setError(error instanceof Error ? error.message : "SafeZone could not share your response.");
     }
+  }
+
+  function skipPractice() {
+    window.localStorage.setItem("safezone-practice-complete", householdId);
+    setPracticeStep("done");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("practice");
+    window.history.replaceState({}, "", url.toString());
+  }
+
+  function startPracticeAlert() {
+    const center = zones[0]?.points[0] || { lat: 37.7749, lng: -122.4194 };
+    const timestamp = new Date().toISOString();
+    const alertPing: LocationPing = {
+      id: `practice-alert-${Date.now()}`,
+      householdId,
+      lat: center.lat + 0.0015,
+      lng: center.lng + 0.0009,
+      accuracy: 8,
+      battery: 84,
+      timestamp,
+      stateAtTime: "alert",
+      zoneId: zones[0]?.id || null,
+      distanceToBoundaryM: 40,
+      graceEndsAt: null
+    };
+    setCareResponse(null);
+    setCareDeclines([]);
+    setDemoResolved(false);
+    setLivePing(alertPing);
+    setHistory((current) => [...current, alertPing]);
+    setSmoothedLocation({ lat: alertPing.lat, lng: alertPing.lng });
+    previousStateRef.current = "alert";
+    setPracticeStep("alert");
+    setConnectionState("live");
+  }
+
+  function completePracticeReturn() {
+    const center = zones[0]?.points[0] || { lat: 37.7749, lng: -122.4194 };
+    const timestamp = new Date().toISOString();
+    const safePing: LocationPing = {
+      id: `practice-safe-${Date.now()}`,
+      householdId,
+      lat: center.lat,
+      lng: center.lng,
+      accuracy: 7,
+      battery: 84,
+      timestamp,
+      stateAtTime: "safe",
+      zoneId: zones[0]?.id || null,
+      distanceToBoundaryM: 5,
+      graceEndsAt: null
+    };
+    setLivePing(safePing);
+    setHistory((current) => [...current, safePing]);
+    setSmoothedLocation({ lat: safePing.lat, lng: safePing.lng });
+    setCareResponse(null);
+    setCareDeclines([]);
+    setDemoResolved(true);
+    previousStateRef.current = "safe";
+    setPracticeStep("resolved");
+    window.localStorage.setItem("safezone-practice-complete", householdId);
+    window.setTimeout(() => {
+      setPracticeStep("done");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("practice");
+      window.history.replaceState({}, "", url.toString());
+    }, 2800);
   }
 
   async function runGuidedDemo() {
@@ -1489,31 +1604,65 @@ function CaregiverView() {
       demoMode={demoMode}
       householdId={householdId}
     >
-      {demoMode || caregiverLiveMode ? (
-        <section className="demo-director" aria-label="Guided demo controls">
-          <div className="demo-director-copy">
-            <span className="demo-label"><i /> {caregiverLiveMode ? "Live tracker · Connected demo" : "Guided demo · Simulated movement"}</span>
-            <strong>
-              {demoStep === 0 && (caregiverLiveMode ? "Tracker ready — simulate or pair a phone" : "Ready to tell the SafeZone story")}
-              {demoStep === 1 && "Safe — Mary is at home"}
-              {demoStep === 2 && "Near boundary — early warning"}
-              {demoStep === 3 && "Confirming exit — grace period"}
-              {demoStep === 4 && "Needs attention — family responding"}
-              {demoStep === 5 && "Resolved — returning to safe zone"}
-            </strong>
+      {practiceStep === "intro" || practiceStep === "alert" || practiceStep === "responded" || practiceStep === "resolved" ? (
+        <section className="practice-overlay" aria-label="Practice alert">
+          <div className="practice-card">
+            <span className="practice-badge">Practice · not a real emergency</span>
+            {practiceStep === "intro" ? (
+              <>
+                <h2>See how an alert works</h2>
+                <p>
+                  We’ll simulate {patientName || "your loved one"} leaving Home Zone on this real dashboard, so you can practice claiming the response.
+                </p>
+                <div className="practice-actions">
+                  <button type="button" onClick={startPracticeAlert}>Start practice alert</button>
+                  <button type="button" className="secondary" onClick={skipPractice}>Skip for now</button>
+                </div>
+              </>
+            ) : null}
+            {practiceStep === "alert" ? (
+              <>
+                <h2>{patientName || "Your loved one"} needs attention</h2>
+                <p>Choose what you would do. Other family members would see your choice instantly.</p>
+                <AlertDecisionActions
+                  alertActive
+                  currentCaregiver={caregiverLabel}
+                  response={careResponse}
+                  declines={careDeclines}
+                  onAction={submitCareAction}
+                />
+              </>
+            ) : null}
+            {practiceStep === "responded" ? (
+              <>
+                <h2>You’re responding</h2>
+                <p>The care circle now knows who is handling it. Watching the return home…</p>
+              </>
+            ) : null}
+            {practiceStep === "resolved" ? (
+              <>
+                <h2>Resolved</h2>
+                <p>{patientName || "Your loved one"} is back inside Home Zone. You’re ready for a real alert.</p>
+              </>
+            ) : null}
           </div>
-          <div className="demo-progress" aria-hidden="true">
-            {[1, 2, 3, 4, 5].map((step) => <span key={step} className={demoStep >= step ? "active" : ""} />)}
+        </section>
+      ) : null}
+      {caregiverLiveMode ? (
+        <section className="demo-director" aria-label="Live tracker controls">
+          <div className="demo-director-copy">
+            <span className="demo-label"><i /> Live tracker</span>
+            <strong>Pair a phone or simulate a path to test SafeZone</strong>
           </div>
           <button type="button" onClick={runGuidedDemo} disabled={demoRunning}>
-            {demoRunning ? "Story playing…" : demoStep > 0 ? "Replay story" : "Start connected tracker story"}
+            {demoRunning ? "Simulating…" : "Simulate exit path"}
           </button>
-          {caregiverLiveMode && livePairUrl ? (
+          {livePairUrl ? (
             <a href={livePairUrl} target="_blank" rel="noreferrer">
               Open patient tracker link
             </a>
           ) : null}
-          <a href="/">{caregiverLiveMode ? "Back home" : "Exit demo"}</a>
+          <a href="/">Back home</a>
         </section>
       ) : null}
       {activeView !== "overview" && activeView !== "map" ? (
@@ -1530,10 +1679,18 @@ function CaregiverView() {
             <strong>{safetyCopy.headline}</strong>
             {isLocationStale && (currentState === "alert" || currentState === "grace") ? <p>Last known state remains urgent, but the location is no longer current.</p> : null}
           </div>
-          <a href={caregiverHref(undefined, demoMode, householdId)}>
+          <a href={caregiverHref(undefined, false, householdId)}>
             {presentedState === "alert" || presentedState === "grace" ? "View location" : presentedState === "unknown" ? "Resolve setup" : "Open overview"}
           </a>
-          {presentedState === "alert" && !careResponse ? <button type="button" onClick={acknowledgeResponse}>I’m responding</button> : null}
+          {presentedState === "alert" ? (
+            <AlertDecisionActions
+              alertActive
+              currentCaregiver={caregiverLabel}
+              response={careResponse}
+              declines={careDeclines}
+              onAction={submitCareAction}
+            />
+          ) : null}
         </section>
       ) : null}
       {activeView === "activity" ? (
@@ -1544,7 +1701,7 @@ function CaregiverView() {
             <article><span className="metric-symbol">◷</span><div><small>Location updates</small><strong>{history.length}</strong><p>In this retained session</p></div></article>
           </section>
           <div className="activity-layout">
-            <HumanTimeline history={history} response={careResponse} />
+            <HumanTimeline history={history} responseHistory={careHistory} />
             <section className="dashboard-card insight-card">
               <div className="dashboard-card-heading"><div><span>Pattern summary</span><h2>What SafeZone observed</h2></div></div>
               <div className="insight-hero"><span>{safePercentage || "—"}{history.length ? "%" : ""}</span><p>of received updates were safely inside Home Zone.</p></div>
@@ -1563,9 +1720,10 @@ function CaregiverView() {
               currentCaregiver={caregiverLabel}
               alertActive={currentState === "alert"}
               response={careResponse}
+              declines={careDeclines}
               householdId={householdId}
-              demoMode={demoMode}
-              onRespond={acknowledgeResponse}
+              demoMode={false}
+              onCareAction={submitCareAction}
             />
           </div>
           <section className="dashboard-card family-explainer">
@@ -1641,9 +1799,11 @@ function CaregiverView() {
           accuracyM={livePing?.accuracy ?? null}
           graceEndsAt={livePing?.graceEndsAt || null}
           response={careResponse}
-          resolved={demoResolved}
-          demoMode={demoMode}
-          onRespond={acknowledgeResponse}
+          declines={careDeclines}
+          resolved={demoResolved || practiceStep === "resolved"}
+          demoMode={false}
+          currentCaregiver={caregiverLabel}
+          onCareAction={submitCareAction}
         />
 
         <TrustSignalsCard ping={livePing} connection={connectionState} connectionLabel={connectionLabel} />
@@ -1666,15 +1826,15 @@ function CaregiverView() {
 
         {drawing ? (
           <section className="mode-card drawing-panel">
-            <span className="mode-label">Editing safe zone</span>
-            <strong>Tap corners on the satellite map.</strong>
-            <p>Use visible ground truth like roofs, driveways, and fences. Click near the first point to close the zone.</p>
+            <span className="mode-label">Editing Home Zone</span>
+            <strong>Tap corners on the map to redraw the boundary.</strong>
+            <p>Use roofs, driveways, and fences. Click near the first point to close the zone.</p>
             <div className="button-row">
               <button type="button" className="secondary" disabled={draft.length === 0} onClick={undoDraftPoint}>
                 Undo point
               </button>
               <button type="button" disabled={!canSnapClose} onClick={closeDraft}>
-                Close zone
+                Save Home Zone
               </button>
               <button type="button" className="ghost" onClick={cancelDrawing}>
                 Cancel
@@ -1684,24 +1844,34 @@ function CaregiverView() {
           </section>
         ) : null}
 
+        {zones.length === 0 && !drawing ? (
+          <section className="mode-card zone-empty-card">
+            <span className="mode-label">Home Zone</span>
+            <strong>Draw Home Zone on the map</strong>
+            <p>Set the boundary here anytime — you don’t need to go back through setup.</p>
+            <button type="button" onClick={startDrawing}>Draw Home Zone</button>
+          </section>
+        ) : null}
+
         {otherViewers.length > 0 ? (
           <p className="presence-badge">{otherViewers.map((viewer) => viewer.label).join(", ")} is also watching.</p>
         ) : null}
 
-        <HumanTimeline history={history} response={careResponse} />
+        <HumanTimeline history={history} responseHistory={careHistory} />
         <FamilyCoordinationCard
           viewers={presence}
           currentCaregiver={caregiverLabel}
           alertActive={currentState === "alert"}
           response={careResponse}
+          declines={careDeclines}
           householdId={householdId}
-          demoMode={demoMode}
-          onRespond={acknowledgeResponse}
+          demoMode={false}
+          onCareAction={submitCareAction}
         />
 
         <section className="daily-actions">
           <button type="button" onClick={startDrawing}>
-            {zones.length === 0 ? "Set Home zone" : "Edit Home zone"}
+            {zones.length === 0 ? "Draw Home Zone" : "Edit Home Zone"}
           </button>
           <button type="button" className="secondary" onClick={() => setTileMode(tileMode === "normal" ? "satellite" : "normal")}>
             {tileMode === "normal" ? "Satellite map" : "Normal map"}
@@ -1738,11 +1908,22 @@ function CaregiverView() {
 
       <section className="map-shell">
         <div className="map-toolbar">
-          <span>{tileMode === "satellite" ? "Satellite" : "Normal"} map</span>
-          <button type="button" onClick={() => setTileMode(tileMode === "normal" ? "satellite" : "normal")}>
-            {tileMode === "normal" ? "Use satellite" : "Use street map"}
-          </button>
+          <span>{zones.length === 0 ? "No Home Zone yet" : tileMode === "satellite" ? "Satellite" : "Street map"}</span>
+          <div className="map-toolbar-actions">
+            <button type="button" onClick={startDrawing}>
+              {drawing ? "Drawing…" : zones.length === 0 ? "Draw Home Zone" : "Edit Home Zone"}
+            </button>
+            <button type="button" className="secondary" onClick={() => setTileMode(tileMode === "normal" ? "satellite" : "normal")}>
+              {tileMode === "normal" ? "Satellite" : "Street"}
+            </button>
+          </div>
         </div>
+        {zones.length === 0 && !drawing ? (
+          <div className="map-empty-hint">
+            <strong>Draw Home Zone on the map</strong>
+            <span>Tap corners around home, then close the shape to save.</span>
+          </div>
+        ) : null}
         <div ref={mapElementRef} className="map" />
         <div className="timeline">
           <div>

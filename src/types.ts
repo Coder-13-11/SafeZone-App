@@ -31,11 +31,15 @@ export type PresenceViewer = {
   label: string;
 };
 
+export type CareResponseStatus = "responding" | "declined" | "takeover" | "help_requested";
+export type CareResponseAction = "going" | "cant" | "takeover";
+
 export type CareResponse = {
   id: string;
   caregiverLabel: string;
-  status: "responding" | "help_requested";
+  status: CareResponseStatus;
   timestamp: string;
+  resolvedAt?: string | null;
 };
 
 export type ServerMessage =
@@ -51,6 +55,7 @@ export type ServerMessage =
     }
   | { type: "presence"; viewers: PresenceViewer[] }
   | { type: "care_response"; response: CareResponse | null }
+  | { type: "care_declines"; declines: CareResponse[] }
   | { type: "patient_paired"; pairedAt: string }
   | { type: "profile"; patientName: string; caregiverName: string };
 

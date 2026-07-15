@@ -1,14 +1,34 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { CareResponse, LocationPing, Zone } from "../types";
-import { fetchHistory, fetchZones, mapPing, mapResponse, mapZone, supabase, supabaseEnabled } from "./supabase";
+import {
+  fetchCareCoordination,
+  fetchHistory,
+  fetchZones,
+  mapPing,
+  supabase,
+  supabaseEnabled
+} from "./supabase";
 
 type SubscriptionHandlers = {
   onLocation?: (ping: LocationPing) => void;
   onZones?: (zones: Zone[]) => void;
   onCareResponse?: (response: CareResponse | null) => void;
+  onCareDeclines?: (declines: CareResponse[]) => void;
+  onCareHistory?: (history: CareResponse[]) => void;
   onPatientPaired?: (pairedAt: string | null) => void;
   onStatus?: (status: "connecting" | "live" | "offline") => void;
 };
+
+async function refreshCare(householdId: string, handlers: SubscriptionHandlers) {
+  try {
+    const coordination = await fetchCareCoordination(householdId);
+    handlers.onCareResponse?.(coordination.active);
+    handlers.onCareDeclines?.(coordination.declines);
+    handlers.onCareHistory?.(coordination.history);
+  } catch {
+    /* ignore transient realtime refresh errors */
+  }
+}
 
 export function subscribeToHousehold(householdId: string, handlers: SubscriptionHandlers) {
   if (!supabaseEnabled || !supabase) {
@@ -46,8 +66,10 @@ export function subscribeToHousehold(householdId: string, handlers: Subscription
     .channel(`safezone:responses:${householdId}`)
     .on(
       "postgres_changes",
-      { event: "INSERT", schema: "public", table: "care_responses", filter: `household_id=eq.${householdId}` },
-      (payload) => handlers.onCareResponse?.(mapResponse(payload.new as never))
+      { event: "*", schema: "public", table: "care_responses", filter: `household_id=eq.${householdId}` },
+      () => {
+        void refreshCare(householdId, handlers);
+      }
     )
     .subscribe();
   channels.push(responses);
@@ -68,6 +90,8 @@ export function subscribeToHousehold(householdId: string, handlers: Subscription
       if (latest) handlers.onLocation?.(latest);
     })
     .catch(() => null);
+
+  void refreshCare(householdId, handlers);
 
   return () => {
     channels.forEach((channel) => client.removeChannel(channel));

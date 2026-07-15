@@ -1,5 +1,12 @@
 import { createClient, type Session, type SupabaseClient, type User } from "@supabase/supabase-js";
-import type { CareResponse, GeofenceState, LatLngPoint, LocationPing, Zone } from "../types";
+import type {
+  CareResponse,
+  CareResponseAction,
+  GeofenceState,
+  LatLngPoint,
+  LocationPing,
+  Zone
+} from "../types";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -58,6 +65,7 @@ type ResponseRow = {
   id: string;
   caregiver_label: string;
   status: CareResponse["status"];
+  resolved_at?: string | null;
   created_at: string;
 };
 
@@ -594,15 +602,42 @@ export async function subscribePush(householdId: string, caregiverLabel: string,
   if (error) throw error;
 }
 
+export async function submitCareResponse(
+  householdId: string,
+  caregiverLabel: string,
+  action: CareResponseAction
+) {
+  const client = requireSupabase();
+  const { data, error } = await client.functions.invoke("submit_care_response", {
+    body: { householdId, caregiverLabel, action }
+  });
+  if (error) throw error;
+  const payload = data as { response: CareResponse };
+  return payload.response;
+}
+
+/** @deprecated Prefer submitCareResponse */
 export async function acknowledgeResponse(householdId: string, caregiverLabel: string) {
+  return submitCareResponse(householdId, caregiverLabel, "going");
+}
+
+export async function fetchCareCoordination(householdId: string) {
   const client = requireSupabase();
   const { data, error } = await client
     .from("care_responses")
-    .insert({ household_id: householdId, caregiver_label: caregiverLabel, status: "responding" })
-    .select("id, caregiver_label, status, created_at")
-    .single();
+    .select("id, caregiver_label, status, resolved_at, created_at")
+    .eq("household_id", householdId)
+    .order("created_at", { ascending: false })
+    .limit(20);
   if (error) throw error;
-  return mapResponse(data as ResponseRow);
+  const rows = (data || []).map((row) => mapResponse(row as ResponseRow));
+  const active =
+    rows.find(
+      (row) =>
+        !row.resolvedAt && (row.status === "responding" || row.status === "takeover")
+    ) || null;
+  const declines = rows.filter((row) => !row.resolvedAt && row.status === "declined");
+  return { active, declines, history: rows };
 }
 
 export function mapHousehold(row: HouseholdRow, member: MemberRow): HouseholdProfile {
@@ -648,6 +683,7 @@ export function mapResponse(row: ResponseRow): CareResponse {
     id: row.id,
     caregiverLabel: row.caregiver_label,
     status: row.status,
-    timestamp: row.created_at
+    timestamp: row.created_at,
+    resolvedAt: row.resolved_at ?? null
   };
 }
