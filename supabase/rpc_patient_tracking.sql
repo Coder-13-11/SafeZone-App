@@ -251,6 +251,14 @@ begin
 
   select geofence_state into previous_state from public.households where id = p_household_id;
 
+  -- Free-plan safeguard: keep only the last 48 hours of pings per household so
+  -- the database never grows past a few MB. Uses the
+  -- location_pings_household_recent_idx index, so this is a cheap no-op when
+  -- there is nothing to delete.
+  delete from public.location_pings
+  where household_id = p_household_id
+    and created_at < now() - interval '48 hours';
+
   insert into public.location_pings (
     household_id,
     patient_device_id,

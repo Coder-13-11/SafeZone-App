@@ -544,6 +544,20 @@ export async function claimPairing(householdId: string, token: string) {
   };
 }
 
+// Free-plan safeguards: remember when the ingest Edge Function is missing so
+// we stop burning an invocation on every ping, and cache the tracking context
+// (zones + geofence memory) so pings cost one RPC instead of two.
+let ingestEdgeFunctionAvailable: boolean | null = null;
+
+type TrackingContextCache = {
+  zones: Zone[];
+  memory: import("./geofence").GeofenceMemory;
+  fetchedAt: number;
+};
+
+const trackingContextCache = new Map<string, TrackingContextCache>();
+const TRACKING_CONTEXT_TTL_MS = 30000;
+
 export async function ingestLocation(
   payload: {
     householdId: string;
@@ -557,55 +571,66 @@ export async function ingestLocation(
 ) {
   const client = requireSupabase();
 
-  const invoked = await client.functions
-    .invoke("ingest_location", {
-      body: payload,
-      headers: { Authorization: `Bearer ${deviceToken}` }
-    })
-    .catch(() => ({ data: null, error: { message: "Edge Function unavailable" } as Error }));
+  if (ingestEdgeFunctionAvailable !== false) {
+    const invoked = await client.functions
+      .invoke("ingest_location", {
+        body: payload,
+        headers: { Authorization: `Bearer ${deviceToken}` }
+      })
+      .catch(() => ({ data: null, error: { message: "Edge Function unavailable" } as Error }));
 
-  if (
-    !invoked.error &&
-    invoked.data &&
-    typeof invoked.data === "object" &&
-    "state" in (invoked.data as Record<string, unknown>)
-  ) {
-    return invoked.data as {
-      id: string;
-      timestamp: string;
-      state: GeofenceState;
-      previousState: GeofenceState;
-      graceEndsAt: string | null;
-    };
+    if (
+      !invoked.error &&
+      invoked.data &&
+      typeof invoked.data === "object" &&
+      "state" in (invoked.data as Record<string, unknown>)
+    ) {
+      ingestEdgeFunctionAvailable = true;
+      return invoked.data as {
+        id: string;
+        timestamp: string;
+        state: GeofenceState;
+        previousState: GeofenceState;
+        graceEndsAt: string | null;
+      };
+    }
+    ingestEdgeFunctionAvailable = false;
   }
-
-  const { data: context, error: contextError } = await client.rpc("get_patient_tracking_context", {
-    p_household_id: payload.householdId,
-    p_device_token: deviceToken
-  });
-  if (contextError) {
-    throw new Error(
-      `${contextError.message} Run supabase/rpc_patient_tracking.sql in the Supabase SQL Editor to enable live tracking.`
-    );
-  }
-
-  const tracking = context as {
-    deviceId: string;
-    geofenceState: GeofenceState;
-    graceStartedAt: string | null;
-    alertSentForExit: boolean;
-    zones: Zone[];
-  };
 
   const { applyLocationLocally, createGeofenceMemory } = await import("./geofence");
-  const memory = createGeofenceMemory();
-  memory.state = tracking.geofenceState || "unknown";
-  memory.graceStartedAt = tracking.graceStartedAt ? Date.parse(tracking.graceStartedAt) : null;
-  memory.alertSentForExit = Boolean(tracking.alertSentForExit);
+
+  let cached = trackingContextCache.get(payload.householdId);
+  if (!cached || Date.now() - cached.fetchedAt > TRACKING_CONTEXT_TTL_MS) {
+    const { data: context, error: contextError } = await client.rpc("get_patient_tracking_context", {
+      p_household_id: payload.householdId,
+      p_device_token: deviceToken
+    });
+    if (contextError) {
+      throw new Error(
+        `${contextError.message} Run supabase/rpc_patient_tracking.sql in the Supabase SQL Editor to enable live tracking.`
+      );
+    }
+
+    const tracking = context as {
+      deviceId: string;
+      geofenceState: GeofenceState;
+      graceStartedAt: string | null;
+      alertSentForExit: boolean;
+      zones: Zone[];
+    };
+
+    const memory = createGeofenceMemory();
+    memory.state = tracking.geofenceState || "unknown";
+    memory.graceStartedAt = tracking.graceStartedAt ? Date.parse(tracking.graceStartedAt) : null;
+    memory.alertSentForExit = Boolean(tracking.alertSentForExit);
+
+    cached = { zones: tracking.zones || [], memory, fetchedAt: Date.now() };
+    trackingContextCache.set(payload.householdId, cached);
+  }
 
   const { ping, evaluation } = applyLocationLocally({
-    memory,
-    zones: tracking.zones || [],
+    memory: cached.memory,
+    zones: cached.zones,
     householdId: payload.householdId,
     lat: payload.lat,
     lng: payload.lng,
@@ -625,7 +650,9 @@ export async function ingestLocation(
     p_zone_id: evaluation.zoneId,
     p_distance_to_boundary_m: evaluation.distanceToBoundaryM,
     p_grace_ends_at: evaluation.graceEndsAt,
-    p_grace_started_at: memory.graceStartedAt ? new Date(memory.graceStartedAt).toISOString() : null
+    p_grace_started_at: cached.memory.graceStartedAt
+      ? new Date(cached.memory.graceStartedAt).toISOString()
+      : null
   });
   if (error) throw error;
 

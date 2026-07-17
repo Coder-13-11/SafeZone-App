@@ -618,10 +618,16 @@ function PatientView() {
       return;
     }
 
+    // Supabase free plan: every ping is a database insert plus Realtime
+    // messages, so real households send every 5s. Demo and /live modes stay
+    // at 2.2s because they never touch Supabase.
+    const usesSupabaseBackend = supabaseEnabled && householdId !== "demo-household" && !patientLiveMode;
+    const sendIntervalMs = usesSupabaseBackend ? 5000 : 2200;
+
     const watchId = navigator.geolocation.watchPosition(
       async (position) => {
         const now = Date.now();
-        if (now - lastSentAt.current < 2200) {
+        if (now - lastSentAt.current < sendIntervalMs) {
           return;
         }
 
