@@ -109,6 +109,40 @@ begin
 end;
 $$;
 
+-- Claim a pairing session with only the short 6-digit code (no household id needed).
+-- Used by the "type a code instead of scanning" fallback on the patient phone.
+create or replace function public.claim_pairing_code(
+  p_code text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  target_household uuid;
+begin
+  if coalesce(p_code, '') = '' then
+    raise exception 'A pairing code is required.';
+  end if;
+
+  select ps.household_id
+  into target_household
+  from public.pairing_sessions ps
+  where ps.token_hash = public.sha256_hex(p_code)
+    and ps.claimed_at is null
+    and ps.expires_at > now()
+  order by ps.created_at desc
+  limit 1;
+
+  if target_household is null then
+    raise exception 'This pairing code is invalid or has expired. Ask the caregiver for a fresh code.';
+  end if;
+
+  return public.claim_pairing_token(target_household, p_code);
+end;
+$$;
+
 create or replace function public.get_patient_tracking_context(
   p_household_id uuid,
   p_device_token text
@@ -265,9 +299,11 @@ end;
 $$;
 
 revoke all on function public.claim_pairing_token(uuid, text) from public;
+revoke all on function public.claim_pairing_code(text) from public;
 revoke all on function public.get_patient_tracking_context(uuid, text) from public;
 revoke all on function public.ingest_patient_location(uuid, text, double precision, double precision, double precision, integer, text, uuid, double precision, timestamptz, timestamptz) from public;
 
 grant execute on function public.claim_pairing_token(uuid, text) to anon, authenticated;
+grant execute on function public.claim_pairing_code(text) to anon, authenticated;
 grant execute on function public.get_patient_tracking_context(uuid, text) to anon, authenticated;
 grant execute on function public.ingest_patient_location(uuid, text, double precision, double precision, double precision, integer, text, uuid, double precision, timestamptz, timestamptz) to anon, authenticated;

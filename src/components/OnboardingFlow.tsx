@@ -79,6 +79,7 @@ export function OnboardingFlow() {
   const [radius, setRadius] = useState(initialDraft?.radius || 120);
   const [pairingURL, setPairingURL] = useState("");
   const [pairingExpiresAt, setPairingExpiresAt] = useState("");
+  const [pairingShortCode, setPairingShortCode] = useState("");
   const [qrDataURL, setQrDataURL] = useState("");
   const [paired, setPaired] = useState(false);
   const [alertsReady, setAlertsReady] = useState(false);
@@ -291,6 +292,7 @@ export function OnboardingFlow() {
 
     setPairingURL(result.patientURL);
     setPairingExpiresAt(result.expiresAt);
+    setPairingShortCode((result as { shortCode?: string | null }).shortCode || "");
     setQrDataURL(
       await QRCode.toDataURL(result.patientURL, {
         width: 320,
@@ -486,6 +488,15 @@ export function OnboardingFlow() {
                     {qrDataURL ? <img src={qrDataURL} alt="One-time QR code for pairing the patient device" /> : <div className="qr-loading">Creating secure code…</div>}
                   </div>
                   <ol className="pair-instructions"><li>Open the camera on {patientName}’s phone</li><li>Point it at this code</li><li>Tap the SafeZone link and confirm</li></ol>
+                  {pairingShortCode ? (
+                    <div className="manual-code-callout">
+                      <span>
+                        Camera not working? On {patientName}’s phone open{" "}
+                        <strong>{pairingURL ? `${new URL(pairingURL).host}/patient` : "the SafeZone patient page"}</strong> and type this code:
+                      </span>
+                      <strong className="manual-code">{pairingShortCode.slice(0, 3)} {pairingShortCode.slice(3)}</strong>
+                    </div>
+                  ) : null}
                   <div className="pair-actions">
                     <button type="button" className="secondary" onClick={async () => { await navigator.clipboard.writeText(pairingURL); setCopied(true); }}>{copied ? "Link copied" : "Copy pairing link"}</button>
                     <button type="button" className={pairingExpired ? "" : "secondary"} onClick={() => { setCopied(false); createPairing(household!.id); }}>{pairingExpired ? "Create a fresh code" : "Create a new code"}</button>

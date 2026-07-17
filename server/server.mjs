@@ -414,17 +414,25 @@ app.post("/api/pairing", (req, res) => {
   }
 
   const token = randomBytes(32).toString("base64url");
+  const shortCode = String(100000 + Math.floor(Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
   const pairing = {
     id: randomUUID(),
     tokenHash: hashToken(token),
-    expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    expiresAt,
+    claimedAt: null
+  };
+  const shortCodePairing = {
+    id: randomUUID(),
+    tokenHash: hashToken(shortCode),
+    expiresAt,
     claimedAt: null
   };
 
   household.pairingSessions = household.pairingSessions
     .filter((session) => Date.parse(session.expiresAt) > Date.now() && !session.claimedAt)
     .slice(-2);
-  household.pairingSessions.push(pairing);
+  household.pairingSessions.push(pairing, shortCodePairing);
   persistence.schedule(households);
 
   const baseURL = process.env.PUBLIC_URL || `${req.protocol}://${req.get("host")}`;
@@ -432,7 +440,8 @@ app.post("/api/pairing", (req, res) => {
   res.status(201).json({
     pairingId: pairing.id,
     expiresAt: pairing.expiresAt,
-    patientURL
+    patientURL,
+    shortCode
   });
 });
 
@@ -444,23 +453,14 @@ app.get("/api/pairing/status", (req, res) => {
   res.json({ paired: Boolean(household.pairedAt), pairedAt: household.pairedAt });
 });
 
-app.post("/api/pairing/claim", (req, res) => {
-  const household = households.get(req.body.householdId);
-  if (!household) {
-    return res.status(404).json({ error: "Household not found." });
-  }
-
-  const token = String(req.body.token || "");
+function claimPairingSession(household, token) {
   const pairing = household.pairingSessions.find(
     (session) =>
       !session.claimedAt &&
       Date.parse(session.expiresAt) > Date.now() &&
       tokenMatches(token, session.tokenHash)
   );
-
-  if (!pairing) {
-    return res.status(410).json({ error: "This pairing link is invalid or has expired." });
-  }
+  if (!pairing) return null;
 
   const deviceToken = randomBytes(32).toString("base64url");
   pairing.claimedAt = nowIso();
@@ -471,11 +471,43 @@ app.post("/api/pairing/claim", (req, res) => {
     type: "patient_paired",
     pairedAt: household.pairedAt
   });
+  return deviceToken;
+}
+
+app.post("/api/pairing/claim", (req, res) => {
+  const household = households.get(req.body.householdId);
+  if (!household) {
+    return res.status(404).json({ error: "Household not found." });
+  }
+
+  const deviceToken = claimPairingSession(household, String(req.body.token || ""));
+  if (!deviceToken) {
+    return res.status(410).json({ error: "This pairing link is invalid or has expired." });
+  }
 
   res.json({
     deviceToken,
     household: publicHousehold(household)
   });
+});
+
+app.post("/api/pairing/claim-code", (req, res) => {
+  const code = String(req.body.code || "").replace(/\D/g, "");
+  if (code.length !== 6) {
+    return res.status(400).json({ error: "Enter the 6-digit code from the caregiver screen." });
+  }
+
+  for (const household of households.values()) {
+    const deviceToken = claimPairingSession(household, code);
+    if (deviceToken) {
+      return res.json({
+        deviceToken,
+        household: publicHousehold(household)
+      });
+    }
+  }
+
+  res.status(410).json({ error: "This pairing code is invalid or has expired. Ask for a fresh code." });
 });
 
 app.get("/api/zones", (req, res) => {

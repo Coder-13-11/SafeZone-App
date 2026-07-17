@@ -371,6 +371,34 @@ function randomPairingToken() {
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+function randomShortPairingCode() {
+  const values = new Uint32Array(1);
+  crypto.getRandomValues(values);
+  return String(100000 + (values[0] % 900000));
+}
+
+// Stores a second pairing session whose token is a short 6-digit code, so the
+// patient phone can pair by typing the code when the camera/QR scan fails.
+async function createShortCodeSession(householdId: string): Promise<string | null> {
+  try {
+    const client = requireSupabase();
+    const user = await getUser();
+    if (!user) return null;
+
+    const code = randomShortPairingCode();
+    const { error } = await client.from("pairing_sessions").insert({
+      household_id: householdId,
+      token_hash: await sha256Hex(code),
+      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      created_by: user.id
+    });
+    if (error) return null;
+    return code;
+  } catch {
+    return null;
+  }
+}
+
 async function createPairingLocally(householdId: string) {
   const client = requireSupabase();
   const user = await getUser();
@@ -412,17 +440,51 @@ export async function createPairing(householdId: string) {
     typeof invoked.data === "object" &&
     "patientURL" in (invoked.data as Record<string, unknown>)
   ) {
-    return invoked.data as { pairingId: string; expiresAt: string; patientURL: string };
+    const pairing = invoked.data as { pairingId: string; expiresAt: string; patientURL: string };
+    return { ...pairing, shortCode: await createShortCodeSession(householdId) };
   }
 
   try {
-    return await createPairingLocally(householdId);
+    const pairing = await createPairingLocally(householdId);
+    return { ...pairing, shortCode: await createShortCodeSession(householdId) };
   } catch (caught) {
     const detail = caught instanceof Error ? caught.message : "Could not create pairing code.";
     throw new Error(
       `${detail} Run supabase/rpc_patient_tracking.sql in the Supabase SQL Editor so pairing can save.`
     );
   }
+}
+
+export async function claimPairingByCode(code: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("claim_pairing_code", {
+    p_code: code.replace(/\D/g, "")
+  });
+  if (error) {
+    const message = error.message.includes("claim_pairing_code")
+      ? "Manual codes need the latest supabase/rpc_patient_tracking.sql run in the Supabase SQL Editor."
+      : error.message;
+    throw new Error(message);
+  }
+
+  const payload = data as {
+    deviceToken: string;
+    deviceId: string;
+    household: {
+      id: string;
+      patientName: string;
+      caregiverName: string;
+      pairedAt: string | null;
+      relationship?: string;
+      geofenceState?: GeofenceState;
+    };
+  };
+
+  return {
+    deviceToken: payload.deviceToken,
+    deviceId: payload.deviceId,
+    household: payload.household
+  };
 }
 
 export async function claimPairing(householdId: string, token: string) {

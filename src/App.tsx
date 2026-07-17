@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import L from "leaflet";
 import { calculateCareConfidence } from "./careConfidence";
 import {
@@ -18,6 +18,7 @@ import { AuthGate } from "./components/AuthGate";
 import { CaregiverBootstrap } from "./components/CaregiverBootstrap";
 import {
   claimPairing as claimSupabasePairing,
+  claimPairingByCode as claimSupabasePairingByCode,
   createOrUpdateHousehold as createOrUpdateSupabaseHousehold,
   fetchCareCoordination as fetchSupabaseCareCoordination,
   fetchHistory as fetchSupabaseHistory,
@@ -91,6 +92,101 @@ function vibrate(pattern: VibratePattern) {
   if ("vibrate" in navigator) {
     navigator.vibrate(pattern);
   }
+}
+
+type WakeLockSentinelLike = {
+  release: () => Promise<void>;
+  addEventListener: (type: "release", listener: () => void) => void;
+};
+
+/**
+ * Keeps the screen awake while the patient page is tracking, so the browser
+ * is never suspended mid-walk. Re-acquires the lock whenever the tab becomes
+ * visible again (the OS silently releases it when the tab is hidden).
+ */
+function useScreenWakeLock(active: boolean) {
+  const [engaged, setEngaged] = useState(false);
+
+  useEffect(() => {
+    if (!active) return;
+    const wakeLockApi = (
+      navigator as Navigator & {
+        wakeLock?: { request: (type: "screen") => Promise<WakeLockSentinelLike> };
+      }
+    ).wakeLock;
+    if (!wakeLockApi) return;
+
+    let sentinel: WakeLockSentinelLike | null = null;
+    let cancelled = false;
+
+    async function acquire() {
+      try {
+        const lock = await wakeLockApi!.request("screen");
+        if (cancelled) {
+          await lock.release().catch(() => {});
+          return;
+        }
+        sentinel = lock;
+        setEngaged(true);
+        lock.addEventListener("release", () => {
+          sentinel = null;
+          setEngaged(false);
+        });
+      } catch {
+        setEngaged(false);
+      }
+    }
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible" && !sentinel) {
+        acquire();
+      }
+    }
+
+    acquire();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      sentinel?.release().catch(() => {});
+      setEngaged(false);
+    };
+  }, [active]);
+
+  return engaged;
+}
+
+type QueuedPing = {
+  householdId: string;
+  lat: number;
+  lng: number;
+  accuracy: number | null;
+  timestamp: string;
+  battery: number | null;
+};
+
+const OFFLINE_QUEUE_LIMIT = 300;
+
+function readOfflineQueue(key: string): QueuedPing[] {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeOfflineQueue(key: string, queue: QueuedPing[]) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(queue.slice(-OFFLINE_QUEUE_LIMIT)));
+  } catch {
+    // Storage may be full; tracking continues with live pings only.
+  }
+}
+
+function isLikelyOfflineError(caught: unknown) {
+  if (!navigator.onLine) return true;
+  return caught instanceof Error && /fetch|network|connection|load failed|timed? ?out/i.test(caught.message);
 }
 
 function metersLabel(value: number | null) {
@@ -394,6 +490,44 @@ function PatientView() {
   const [lastPing, setLastPing] = useState<LocationPing | null>(null);
   const [serverState, setServerState] = useState<GeofenceState>("unknown");
   const [message, setMessage] = useState("Preparing location tracking...");
+  const wakeLockEngaged = useScreenWakeLock(activationState === "paired");
+  const offlineQueueKey = `safezone-offline-pings:${householdId}`;
+  const [queuedCount, setQueuedCount] = useState(() => readOfflineQueue(offlineQueueKey).length);
+  const [manualCode, setManualCode] = useState("");
+  const [claimingCode, setClaimingCode] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
+
+  async function claimWithManualCode(event: FormEvent) {
+    event.preventDefault();
+    const code = manualCode.replace(/\D/g, "");
+    if (code.length !== 6) {
+      setCodeError("Enter all 6 digits shown on the caregiver screen.");
+      return;
+    }
+    setClaimingCode(true);
+    setCodeError(null);
+    try {
+      const result = supabaseEnabled
+        ? await claimSupabasePairingByCode(code)
+        : await fetch("/api/pairing/claim-code", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code })
+          }).then(async (response) => {
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || "This pairing code could not be used.");
+            return payload as { deviceToken: string; household: { id: string; patientName: string } };
+          });
+
+      window.localStorage.setItem(`safezone-patient-token:${result.household.id}`, result.deviceToken);
+      window.localStorage.setItem("safezone-household-id", result.household.id);
+      window.localStorage.setItem("safezone-patient-name", result.household.patientName);
+      window.location.replace(`/patient?household=${encodeURIComponent(result.household.id)}`);
+    } catch (caught) {
+      setCodeError(caught instanceof Error ? caught.message : "This pairing code could not be used.");
+      setClaimingCode(false);
+    }
+  }
 
   useEffect(() => {
     if (householdId === "demo-household") return;
@@ -495,7 +629,7 @@ function PatientView() {
         setTrackingState("active");
         setMessage("Location was shared successfully.");
 
-        const payload = {
+        const payload: QueuedPing = {
           householdId,
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -504,37 +638,51 @@ function PatientView() {
           battery: battery ? Math.round(battery.level * 100) : null
         };
 
-        try {
-          const deviceToken = window.localStorage.getItem(deviceTokenKey);
-          if (!deviceToken && householdId !== "demo-household" && !patientLiveMode) {
-            throw new Error("This phone needs to be paired again.");
-          }
-          const result = patientLiveMode
+        const deviceToken = window.localStorage.getItem(deviceTokenKey);
+        const transmit = async (ping: QueuedPing) =>
+          patientLiveMode
             ? ingestLiveLocation(
                 householdId,
                 {
-                  lat: payload.lat,
-                  lng: payload.lng,
-                  accuracy: payload.accuracy,
-                  battery: payload.battery,
-                  timestamp: payload.timestamp
+                  lat: ping.lat,
+                  lng: ping.lng,
+                  accuracy: ping.accuracy,
+                  battery: ping.battery,
+                  timestamp: ping.timestamp
                 },
                 getLiveGeofenceMemory(householdId)
               )
             : supabaseEnabled && householdId !== "demo-household"
-            ? await ingestSupabaseLocation(payload, deviceToken || "")
+            ? await ingestSupabaseLocation(ping, deviceToken || "")
             : await fetch(apiUrl("/api/location"), {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                   ...(deviceToken ? { Authorization: `Bearer ${deviceToken}` } : {})
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(ping)
               }).then(async (response) => {
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.error || "SafeZone could not accept this location.");
                 return result as { state: GeofenceState; previousState: GeofenceState; graceEndsAt?: string | null };
               });
+
+        try {
+          if (!deviceToken && householdId !== "demo-household" && !patientLiveMode) {
+            throw new Error("This phone needs to be paired again.");
+          }
+
+          // Deliver pings buffered while offline first, oldest to newest, so
+          // the caregiver timeline stays in order.
+          let queue = readOfflineQueue(offlineQueueKey);
+          while (queue.length > 0) {
+            await transmit(queue[0]);
+            queue = queue.slice(1);
+            writeOfflineQueue(offlineQueueKey, queue);
+            setQueuedCount(queue.length);
+          }
+
+          const result = await transmit(payload);
 
           if (
             (result.previousState === "grace" || result.previousState === "alert") &&
@@ -553,6 +701,16 @@ function PatientView() {
             graceEndsAt: result.graceEndsAt || null
           });
         } catch (caught) {
+          if (isLikelyOfflineError(caught)) {
+            const queue = [...readOfflineQueue(offlineQueueKey), payload].slice(-OFFLINE_QUEUE_LIMIT);
+            writeOfflineQueue(offlineQueueKey, queue);
+            setQueuedCount(queue.length);
+            setTrackingState("error");
+            setMessage(
+              `No internet right now. ${queue.length} location update${queue.length === 1 ? " is" : "s are"} saved on this phone and will send automatically when the connection returns.`
+            );
+            return;
+          }
           setTrackingState("error");
           setMessage(
             caught instanceof Error
@@ -598,6 +756,28 @@ function PatientView() {
               <span>2</span><p>Scan the one-time QR code with this phone’s camera.</p>
               <span>3</span><p>Return here and allow location when asked.</p>
             </div>
+          ) : null}
+          {activationState !== "checking" && !patientLiveMode ? (
+            <form className="manual-pair-form" onSubmit={claimWithManualCode}>
+              <span>Camera not working? Type the 6-digit code from the caregiver screen instead.</span>
+              <div className="manual-pair-row">
+                <input
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="123 456"
+                  aria-label="6-digit pairing code"
+                  value={manualCode}
+                  onChange={(event) => {
+                    const digits = event.target.value.replace(/\D/g, "").slice(0, 6);
+                    setManualCode(digits.length > 3 ? `${digits.slice(0, 3)} ${digits.slice(3)}` : digits);
+                  }}
+                />
+                <button type="submit" disabled={claimingCode}>
+                  {claimingCode ? "Connecting…" : "Connect"}
+                </button>
+              </div>
+              {codeError ? <p className="error" role="alert">{codeError}</p> : null}
+            </form>
           ) : null}
         </section>
       </main>
@@ -653,7 +833,12 @@ function PatientView() {
           </button>
         ) : null}
         <div className="patient-care-notes">
-          <p><span>1</span><strong>Keep this page open</strong>This browser page must remain open for continuous web location sharing.</p>
+          <p>
+            <span>1</span><strong>Keep this page open</strong>
+            {wakeLockEngaged
+              ? "SafeZone is keeping this screen awake so tracking never pauses. Just leave the page open."
+              : "This browser page must remain open for continuous web location sharing."}
+          </p>
           <p><span>2</span><strong>Add to Home Screen</strong>On iPhone, use Share → Add to Home Screen so SafeZone is easy to reopen.</p>
           <p><span>3</span><strong>Keep the phone charged</strong>Leave the phone with {patientName || "the person being cared for"}.</p>
           <p><span>4</span><strong>Family sees updates—not surveillance</strong>SafeZone shares reported location and accuracy with the connected care circle.</p>
@@ -664,6 +849,8 @@ function PatientView() {
             <div><span>Last family update</span><strong>{freshnessLabel(lastPing)}</strong></div>
             <div><span>GPS accuracy</span><strong>{lastPing?.accuracy ? `About ${metersLabel(lastPing.accuracy)}` : "Waiting"}</strong></div>
             {battery ? <div><span>Phone battery</span><strong>{Math.round(battery.level * 100)}%</strong></div> : null}
+            <div><span>Screen stays awake</span><strong>{wakeLockEngaged ? "Yes, while tracking" : "Managed by browser"}</strong></div>
+            {queuedCount > 0 ? <div><span>Saved offline</span><strong>{queuedCount} update{queuedCount === 1 ? "" : "s"} waiting</strong></div> : null}
             <div>
               <span>Boundary status</span>
               <strong>
@@ -747,6 +934,19 @@ function CaregiverView() {
   const [error, setError] = useState<string | null>(null);
   const [profileStatus, setProfileStatus] = useState("");
   const [nowTick, setNowTick] = useState(Date.now());
+  const [alertCooldownMin, setAlertCooldownMin] = useState(() => {
+    const stored = window.localStorage.getItem("safezone-alert-cooldown-min");
+    const parsed = stored === null ? NaN : Number(stored);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 5;
+  });
+  const alertCooldownMinRef = useRef(alertCooldownMin);
+  const lastAlertEffectAtRef = useRef(0);
+
+  function updateAlertCooldown(minutes: number) {
+    setAlertCooldownMin(minutes);
+    alertCooldownMinRef.current = minutes;
+    window.localStorage.setItem("safezone-alert-cooldown-min", String(minutes));
+  }
 
   const currentState = livePing?.stateAtTime || "unknown";
   const isLocationStale = livePing ? nowTick - Date.parse(livePing.timestamp) > 60000 : false;
@@ -1123,7 +1323,15 @@ function CaregiverView() {
     }
 
     if (nextState === "alert") {
-      vibrate([200, 100, 200, 100, 200]);
+      const cooldownMs = alertCooldownMinRef.current * 60 * 1000;
+      const now = Date.now();
+      // Boundary flapping can re-trigger alerts back to back. The dashboard
+      // state always updates, but the strong vibration is calmed during the
+      // configured cooldown window so repeated alerts don't cause panic.
+      if (cooldownMs === 0 || now - lastAlertEffectAtRef.current >= cooldownMs) {
+        vibrate([200, 100, 200, 100, 200]);
+        lastAlertEffectAtRef.current = now;
+      }
     }
 
     window.setTimeout(() => setVisualPulse("unknown"), 1800);
@@ -1758,6 +1966,24 @@ function CaregiverView() {
             <button type="button" onClick={subscribeToPush}>{notificationReady ? "Refresh notification setup" : "Enable notifications"}</button>
             <p className="settings-footnote">On iPhone, install SafeZone to the Home Screen first for background Web Push.</p>
           </section>
+          <section className="dashboard-card settings-section">
+            <div className="dashboard-card-heading"><div><span>Calm alerts</span><h2>Repeat-alert cooldown</h2></div></div>
+            <p>
+              When {patientName || "your loved one"} walks near the boundary, the state can flip back and forth quickly.
+              The map and safety state always update instantly—this only calms repeated alarm vibrations so the family
+              isn’t startled over and over.
+            </p>
+            <label className="cooldown-control">
+              <span>Quiet window between repeated alarms</span>
+              <select value={alertCooldownMin} onChange={(event) => updateAlertCooldown(Number(event.target.value))}>
+                <option value={0}>Off — every alert vibrates</option>
+                <option value={2}>2 minutes</option>
+                <option value={5}>5 minutes (recommended)</option>
+                <option value={10}>10 minutes</option>
+                <option value={15}>15 minutes</option>
+              </select>
+            </label>
+          </section>
           {isLocationStale || connectionState === "offline" || !livePing ? (
             <section className="dashboard-card settings-section reliability-recovery">
               <div className="dashboard-card-heading">
@@ -1771,7 +1997,8 @@ function CaregiverView() {
                 </span>
               </div>
               <p>
-                SafeZone only receives location while the patient browser page stays open. A closed or suspended browser cannot keep sharing GPS.
+                SafeZone only receives location while the patient browser page stays open. While the page is open, SafeZone keeps the
+                screen awake automatically, and any updates missed offline are saved on the phone and sent once it reconnects.
               </p>
               <ol className="recovery-steps">
                 <li>Open SafeZone on {patientName || "the patient"}&apos;s phone from the Home Screen shortcut.</li>

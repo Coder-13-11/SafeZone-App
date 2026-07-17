@@ -14,6 +14,7 @@ export function PatientPairingCard({
   const [paired, setPaired] = useState(initiallyPaired);
   const [qrDataURL, setQrDataURL] = useState("");
   const [pairingURL, setPairingURL] = useState("");
+  const [shortCode, setShortCode] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +66,7 @@ export function PatientPairingCard({
           });
       setPairingURL(result.patientURL);
       setExpiresAt(result.expiresAt);
+      setShortCode((result as { shortCode?: string | null }).shortCode || "");
       setQrDataURL(
         await QRCode.toDataURL(result.patientURL, {
           width: 320,
@@ -116,6 +118,15 @@ export function PatientPairingCard({
               </p>
             ) : null}
             <ol><li>Open the phone camera</li><li>Scan this QR code</li><li>Allow location on the SafeZone page</li></ol>
+            {shortCode ? (
+              <div className="manual-code-callout">
+                <span>
+                  Camera not working? On the patient phone open{" "}
+                  <strong>{pairingURL ? `${new URL(pairingURL).host}/patient` : "the SafeZone patient page"}</strong> and type:
+                </span>
+                <strong className="manual-code">{shortCode.slice(0, 3)} {shortCode.slice(3)}</strong>
+              </div>
+            ) : null}
             <div className="pair-actions">
               <button type="button" className="secondary" onClick={async () => { await navigator.clipboard.writeText(pairingURL); setCopied(true); }}>{copied ? "Link copied" : "Copy link"}</button>
             </div>

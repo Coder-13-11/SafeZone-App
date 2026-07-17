@@ -66,7 +66,8 @@ Vercel build env vars are configured in `vercel.json`. Pushing to `main` redeplo
      - `http://localhost:5173/onboarding`
      - `http://localhost:5173/caregiver`
 3. **SQL Editor** → also run `supabase/rpc_patient_tracking.sql`  
-   This enables real QR pairing + patient location tracking even when Edge Functions are not deployed.
+   This enables real QR pairing + patient location tracking even when Edge Functions are not deployed.  
+   Re-run it after pulling updates: it now also adds `claim_pairing_code`, which powers the manual 6-digit pairing code fallback on the patient phone.
 4. **Authentication → Email Templates → Magic Link** (optional)  
    Include `{{ .Token }}` if you want email OTP codes in addition to magic links.  
    Optional: under **Authentication → Providers → Anonymous**, enable Anonymous Sign-Ins so **Continue without email** works when email rate limits are hit.
