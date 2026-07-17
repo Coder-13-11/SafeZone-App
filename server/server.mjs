@@ -557,6 +557,19 @@ app.post("/api/zones", (req, res) => {
   res.status(existingIndex >= 0 ? 200 : 201).json({ zone, zones: household.zones });
 });
 
+app.delete("/api/zones/:id", (req, res) => {
+  const household = getHousehold(String(req.query.householdId || defaultHouseholdId));
+  const before = household.zones.length;
+  household.zones = household.zones.filter((zone) => zone.id !== req.params.id);
+  if (household.zones.length === before) {
+    return res.status(404).json({ error: "Zone not found." });
+  }
+
+  persistence.schedule(households);
+  broadcast(household, { type: "zones", zones: household.zones });
+  res.json({ zones: household.zones });
+});
+
 app.get("/api/history", (req, res) => {
   const household = getHousehold(String(req.query.householdId || defaultHouseholdId));
   const since = req.query.since ? Date.parse(String(req.query.since)) : 0;

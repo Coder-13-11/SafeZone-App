@@ -321,19 +321,35 @@ export async function fetchZones(householdId: string): Promise<Zone[]> {
 
 export async function saveZone(householdId: string, zone: Partial<Zone> & { points: LatLngPoint[] }) {
   const client = requireSupabase();
+  // Upsert so editing an existing zone updates it instead of inserting a duplicate.
   const { data, error } = await client
     .from("safe_zones")
-    .insert({
-      household_id: householdId,
-      name: zone.name || "Home Zone",
-      color: zone.color || "#8fd5ae",
-      points: zone.points,
-      is_active: zone.isActive ?? true
-    })
+    .upsert(
+      {
+        ...(zone.id ? { id: zone.id } : {}),
+        household_id: householdId,
+        name: zone.name || "Home Zone",
+        color: zone.color || "#8fd5ae",
+        points: zone.points,
+        is_active: zone.isActive ?? true
+      },
+      { onConflict: "id" }
+    )
     .select("id, household_id, name, color, points, is_active")
     .single();
   if (error) throw error;
   return { zone: mapZone(data as ZoneRow), zones: await fetchZones(householdId) };
+}
+
+export async function deleteZone(householdId: string, zoneId: string) {
+  const client = requireSupabase();
+  const { error } = await client
+    .from("safe_zones")
+    .delete()
+    .eq("id", zoneId)
+    .eq("household_id", householdId);
+  if (error) throw error;
+  return { zones: await fetchZones(householdId) };
 }
 
 export async function fetchHistory(householdId: string, limit = 500): Promise<LocationPing[]> {

@@ -20,6 +20,7 @@ import {
   claimPairing as claimSupabasePairing,
   claimPairingByCode as claimSupabasePairingByCode,
   createOrUpdateHousehold as createOrUpdateSupabaseHousehold,
+  deleteZone as deleteSupabaseZone,
   fetchCareCoordination as fetchSupabaseCareCoordination,
   fetchHistory as fetchSupabaseHistory,
   fetchZones as fetchSupabaseZones,
@@ -357,12 +358,58 @@ function ema(previous: LatLngPoint | null, next: LatLngPoint) {
   };
 }
 
-function pointDistancePx(map: L.Map, a: LatLngPoint, b: LatLngPoint) {
-  return map.latLngToContainerPoint([a.lat, a.lng]).distanceTo(map.latLngToContainerPoint([b.lat, b.lng]));
-}
-
 function toLeafletPoints(points: LatLngPoint[]): L.LatLngExpression[] {
   return points.map((point) => [point.lat, point.lng] as L.LatLngExpression);
+}
+
+const EARTH_RADIUS_M = 6371000;
+
+function metersBetweenPoints(a: LatLngPoint, b: LatLngPoint) {
+  const toRad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * toRad;
+  const dLng = (b.lng - a.lng) * toRad;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * toRad) * Math.cos(b.lat * toRad) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h));
+}
+
+function zoneCenter(points: LatLngPoint[]): LatLngPoint {
+  const sum = points.reduce(
+    (acc, point) => ({ lat: acc.lat + point.lat, lng: acc.lng + point.lng }),
+    { lat: 0, lng: 0 }
+  );
+  return { lat: sum.lat / points.length, lng: sum.lng / points.length };
+}
+
+function zoneRadiusM(points: LatLngPoint[], center = zoneCenter(points)) {
+  const total = points.reduce((acc, point) => acc + metersBetweenPoints(center, point), 0);
+  return total / points.length;
+}
+
+function circleZonePoints(center: LatLngPoint, radiusM: number): LatLngPoint[] {
+  const latitudeRadians = (center.lat * Math.PI) / 180;
+  return Array.from({ length: 32 }, (_, index) => {
+    const angle = (index / 32) * Math.PI * 2;
+    const north = Math.cos(angle) * radiusM;
+    const east = Math.sin(angle) * radiusM;
+    return {
+      lat: center.lat + (north / EARTH_RADIUS_M) * (180 / Math.PI),
+      lng: center.lng + (east / (EARTH_RADIUS_M * Math.cos(latitudeRadians))) * (180 / Math.PI)
+    };
+  });
+}
+
+const MIN_ZONE_RADIUS_M = 30;
+const MAX_ZONE_RADIUS_M = 1500;
+
+// Position of the resize handle: due east of the zone center on the boundary.
+function zoneRadiusHandlePosition(center: LatLngPoint, radiusM: number): LatLngPoint {
+  const latitudeRadians = (center.lat * Math.PI) / 180;
+  return {
+    lat: center.lat,
+    lng: center.lng + (radiusM / (EARTH_RADIUS_M * Math.cos(latitudeRadians))) * (180 / Math.PI)
+  };
 }
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -390,6 +437,18 @@ async function fetchZones() {
 }
 
 async function saveZone(zone: Partial<Zone> & { points: LatLngPoint[] }) {
+  if (householdId === "demo-household" && !liveMode && !readLiveHousehold(householdId)) {
+    // Sample mode has no backend; zones live only in this browser session.
+    const demoZone: Zone = {
+      id: zone.id || `demo-zone-${Date.now()}`,
+      householdId,
+      name: zone.name || "Home Zone",
+      color: zone.color || "#8fd5ae",
+      isActive: true,
+      points: zone.points
+    };
+    return { zone: demoZone, zones: [demoZone] };
+  }
   if (liveMode || readLiveHousehold(householdId)) {
     const household = readLiveHousehold(householdId) || ensureLiveHousehold(householdId);
     const nextZone: Zone = {
@@ -426,6 +485,28 @@ async function saveZone(zone: Partial<Zone> & { points: LatLngPoint[] }) {
   }
 
   return (await response.json()) as { zone: Zone; zones: Zone[] };
+}
+
+async function deleteZone(zoneId: string) {
+  if (liveMode || readLiveHousehold(householdId)) {
+    const household = readLiveHousehold(householdId) || ensureLiveHousehold(householdId);
+    return saveLiveZones(
+      householdId,
+      household.zones.filter((zone) => zone.id !== zoneId)
+    );
+  }
+  if (supabaseEnabled && householdId !== "demo-household") {
+    return deleteSupabaseZone(householdId, zoneId);
+  }
+
+  const response = await fetch(
+    apiUrl(`/api/zones/${encodeURIComponent(zoneId)}?householdId=${encodeURIComponent(householdId)}`),
+    { method: "DELETE" }
+  );
+  if (!response.ok) {
+    throw new Error((await response.json()).error || "Failed to remove zone");
+  }
+  return (await response.json()) as { zones: Zone[] };
 }
 
 function App() {
@@ -897,10 +978,7 @@ function CaregiverView() {
   const satelliteLayerRef = useRef<L.TileLayer | null>(null);
   const zonesLayerRef = useRef<L.LayerGroup | null>(null);
   const liveLayerRef = useRef<L.LayerGroup | null>(null);
-  const draftLayerRef = useRef<L.LayerGroup | null>(null);
   const historyLayerRef = useRef<L.LayerGroup | null>(null);
-  const draftRef = useRef<LatLngPoint[]>([]);
-  const drawingRef = useRef(false);
   const previousStateRef = useRef<GeofenceState>("unknown");
   const demoRunRef = useRef(0);
   const [caregiverLabel, setCaregiverLabel] = useState(
@@ -909,9 +987,7 @@ function CaregiverView() {
   const [patientName, setPatientName] = useState(initialPatientName);
   const [zones, setZones] = useState<Zone[]>([]);
   const [tileMode, setTileMode] = useState<"normal" | "satellite">("normal");
-  const [drawing, setDrawing] = useState(false);
-  const [draft, setDraft] = useState<LatLngPoint[]>([]);
-  const [canSnapClose, setCanSnapClose] = useState(false);
+  const [confirmZoneDeleteId, setConfirmZoneDeleteId] = useState<string | null>(null);
   const [livePing, setLivePing] = useState<LocationPing | null>(null);
   const [smoothedLocation, setSmoothedLocation] = useState<LatLngPoint | null>(null);
   const [history, setHistory] = useState<LocationPing[]>([]);
@@ -1062,63 +1138,9 @@ function CaregiverView() {
 
     zonesLayerRef.current = L.layerGroup().addTo(map);
     liveLayerRef.current = L.layerGroup().addTo(map);
-    draftLayerRef.current = L.layerGroup().addTo(map);
     historyLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
-
-    map.on("click", (event: L.LeafletMouseEvent) => {
-      if (!drawingRef.current) {
-        return;
-      }
-
-      const nextPoint = { lat: event.latlng.lat, lng: event.latlng.lng };
-      const currentDraft = draftRef.current;
-
-      if (currentDraft.length >= 3 && pointDistancePx(map, currentDraft[0], nextPoint) <= 15) {
-        closeDraft();
-        return;
-      }
-
-      const nextDraft = [...currentDraft, nextPoint];
-      draftRef.current = nextDraft;
-      setDraft(nextDraft);
-    });
   }, []);
-
-  useEffect(() => {
-    drawingRef.current = drawing;
-  }, [drawing]);
-
-  useEffect(() => {
-    draftRef.current = draft;
-    const map = mapRef.current;
-    const layer = draftLayerRef.current;
-
-    if (!map || !layer) {
-      return;
-    }
-
-    layer.clearLayers();
-
-    if (draft.length > 0) {
-      L.polyline(
-        toLeafletPoints(draft),
-        { color: "#f2b35d", weight: 3, dashArray: "8 8" }
-      ).addTo(layer);
-
-      draft.forEach((point, index) => {
-        L.circleMarker([point.lat, point.lng], {
-          radius: index === 0 ? 8 : 6,
-          color: index === 0 ? "#f2b35d" : "#dce8df",
-          fillColor: index === 0 ? "#f2b35d" : "#dce8df",
-          fillOpacity: 1,
-          weight: 2
-        }).addTo(layer);
-      });
-    }
-
-    setCanSnapClose(draft.length >= 3);
-  }, [draft]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1286,22 +1308,6 @@ function CaregiverView() {
   }, [caregiverLabel, caregiverLiveMode]);
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!drawingRef.current) {
-        return;
-      }
-
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
-        event.preventDefault();
-        undoDraftPoint();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
-  useEffect(() => {
     renderZones();
   }, [zones]);
 
@@ -1348,41 +1354,151 @@ function CaregiverView() {
         return;
       }
 
-      L.polygon(
-        toLeafletPoints(zone.points),
-        {
-          color: zone.color,
-          fillColor: zone.color,
-          fillOpacity: 0.18,
-          weight: 3
-        }
-      ).addTo(layer);
+      const center = zoneCenter(zone.points);
+      let radius = Math.max(MIN_ZONE_RADIUS_M, zoneRadiusM(zone.points, center));
+      let livePoints = circleZonePoints(center, radius);
 
-      zone.points.forEach((point, index) => {
-        const marker = L.marker([point.lat, point.lng], {
-          draggable: true,
-          icon: L.divIcon({
-            className: "vertex-handle",
-            iconSize: [18, 18],
-            iconAnchor: [9, 9]
-          })
-        }).addTo(layer);
+      // Draw as a true circle so families see a clean boundary, not a many-sided polygon.
+      const circle = L.circle([center.lat, center.lng], {
+        radius,
+        color: zone.color,
+        fillColor: zone.color,
+        fillOpacity: 0.18,
+        weight: 3
+      }).addTo(layer);
 
-        marker.on("dragend", async () => {
-          const nextLatLng = marker.getLatLng();
-          const nextPoints = zone.points.map((currentPoint, pointIndex) =>
-            pointIndex === index ? { lat: nextLatLng.lat, lng: nextLatLng.lng } : currentPoint
-          );
+      const moveHandle = L.marker([center.lat, center.lng], {
+        draggable: true,
+        icon: L.divIcon({
+          className: "zone-move-handle",
+          html: "⌂",
+          iconSize: [38, 38],
+          iconAnchor: [19, 19]
+        })
+      }).addTo(layer);
+      moveHandle.bindTooltip("Drag to move the whole zone", { direction: "top", offset: [0, -18] });
 
-          try {
-            const result = await saveZone({ ...zone, points: nextPoints });
-            setZones(result.zones);
-          } catch (error) {
-            setError(error instanceof Error ? error.message : "Could not update zone.");
-          }
-        });
+      const handleStart = zoneRadiusHandlePosition(center, radius);
+      const resizeHandle = L.marker([handleStart.lat, handleStart.lng], {
+        draggable: true,
+        icon: L.divIcon({
+          className: "zone-resize-handle",
+          html: "⇔",
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        })
+      }).addTo(layer);
+      resizeHandle.bindTooltip(`About ${Math.round(radius)} m — drag to resize`, {
+        direction: "top",
+        offset: [0, -14]
+      });
+
+      moveHandle.on("drag", () => {
+        const position = moveHandle.getLatLng();
+        livePoints = circleZonePoints({ lat: position.lat, lng: position.lng }, radius);
+        circle.setLatLng(position);
+        const nextHandle = zoneRadiusHandlePosition({ lat: position.lat, lng: position.lng }, radius);
+        resizeHandle.setLatLng([nextHandle.lat, nextHandle.lng]);
+      });
+
+      moveHandle.on("dragend", () => {
+        void commitZoneChange({ ...zone, points: livePoints });
+      });
+
+      resizeHandle.on("drag", () => {
+        const position = resizeHandle.getLatLng();
+        const currentCenter = moveHandle.getLatLng();
+        radius = Math.min(
+          MAX_ZONE_RADIUS_M,
+          Math.max(
+            MIN_ZONE_RADIUS_M,
+            metersBetweenPoints(
+              { lat: currentCenter.lat, lng: currentCenter.lng },
+              { lat: position.lat, lng: position.lng }
+            )
+          )
+        );
+        livePoints = circleZonePoints({ lat: currentCenter.lat, lng: currentCenter.lng }, radius);
+        circle.setRadius(radius);
+        resizeHandle.setTooltipContent(`About ${Math.round(radius)} m — drag to resize`);
+      });
+
+      resizeHandle.on("dragend", () => {
+        const currentCenter = moveHandle.getLatLng();
+        livePoints = circleZonePoints({ lat: currentCenter.lat, lng: currentCenter.lng }, radius);
+        const snapped = zoneRadiusHandlePosition({ lat: currentCenter.lat, lng: currentCenter.lng }, radius);
+        resizeHandle.setLatLng([snapped.lat, snapped.lng]);
+        void commitZoneChange({ ...zone, points: livePoints });
       });
     });
+  }
+
+  async function commitZoneChange(zone: Zone) {
+    if (demoMode) {
+      setZones((current) => current.map((item) => (item.id === zone.id ? zone : item)));
+      return;
+    }
+    try {
+      const result = await saveZone(zone);
+      setZones(result.zones);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not update the zone.");
+    }
+  }
+
+  async function resizeZone(zone: Zone, radiusM: number) {
+    const center = zoneCenter(zone.points);
+    const nextRadius = Math.min(MAX_ZONE_RADIUS_M, Math.max(MIN_ZONE_RADIUS_M, radiusM));
+    await commitZoneChange({
+      ...zone,
+      points: circleZonePoints(center, nextRadius)
+    });
+  }
+
+  async function removeZone(zoneId: string) {
+    setConfirmZoneDeleteId(null);
+    if (demoMode) {
+      setZones((current) => current.filter((zone) => zone.id !== zoneId));
+      return;
+    }
+    try {
+      const result = await deleteZone(zoneId);
+      setZones(result.zones);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not remove the zone.");
+    }
+  }
+
+  async function addHomeZone() {
+    const map = mapRef.current;
+    const center = livePing
+      ? { lat: livePing.lat, lng: livePing.lng }
+      : map
+        ? { lat: map.getCenter().lat, lng: map.getCenter().lng }
+        : { lat: 37.7749, lng: -122.4194 };
+
+    const zone = {
+      name: zones.length === 0 ? "Home Zone" : `Safe Zone ${zones.length + 1}`,
+      color: zones.length === 0 ? "#8fd5ae" : "#6aa7b0",
+      points: circleZonePoints(center, 120)
+    };
+
+    if (demoMode) {
+      setZones((current) => [
+        ...current,
+        { id: `demo-zone-${Date.now()}`, householdId, isActive: true, ...zone }
+      ]);
+      map?.fitBounds(L.latLngBounds(toLeafletPoints(zone.points)).pad(0.6));
+      return;
+    }
+
+    try {
+      const result = await saveZone(zone);
+      setZones(result.zones);
+      map?.fitBounds(L.latLngBounds(toLeafletPoints(zone.points)).pad(0.6));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not add the zone.");
+    }
   }
 
   function renderLiveLocation() {
@@ -1432,47 +1548,6 @@ function CaregiverView() {
         fillOpacity: 1,
         weight: 2
       }).addTo(historyLayer);
-    }
-  }
-
-  function startDrawing() {
-    setTileMode("satellite");
-    setDrawing(true);
-    setDraft([]);
-    draftRef.current = [];
-  }
-
-  function cancelDrawing() {
-    setDrawing(false);
-    setDraft([]);
-    draftRef.current = [];
-    setTileMode("normal");
-  }
-
-  function undoDraftPoint() {
-    const nextDraft = draftRef.current.slice(0, -1);
-    draftRef.current = nextDraft;
-    setDraft(nextDraft);
-  }
-
-  async function closeDraft() {
-    if (draftRef.current.length < 3) {
-      return;
-    }
-
-    try {
-      const result = await saveZone({
-        name: zones.length === 0 ? "Home Safe Zone" : `Safe Zone ${zones.length + 1}`,
-        color: zones.length === 0 ? "#8fbf9f" : "#6aa7b0",
-        points: draftRef.current
-      });
-      setZones(result.zones);
-      setDrawing(false);
-      setDraft([]);
-      draftRef.current = [];
-      setTileMode("normal");
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Could not save the zone.");
     }
   }
 
@@ -1933,34 +2008,55 @@ function CaregiverView() {
           </button>
         </section>
 
-        {drawing ? (
-          <section className="mode-card drawing-panel">
-            <span className="mode-label">Editing Home Zone</span>
-            <strong>Tap corners on the map to redraw the boundary.</strong>
-            <p>Use roofs, driveways, and fences. Click near the first point to close the zone.</p>
-            <div className="button-row">
-              <button type="button" className="secondary" disabled={draft.length === 0} onClick={undoDraftPoint}>
-                Undo point
-              </button>
-              <button type="button" disabled={!canSnapClose} onClick={closeDraft}>
-                Save Home Zone
-              </button>
-              <button type="button" className="ghost" onClick={cancelDrawing}>
-                Cancel
-              </button>
-            </div>
-            <small>{draft.length >= 3 ? "Ready to close when you return to the first point." : "Place at least three points."}</small>
-          </section>
-        ) : null}
-
-        {zones.length === 0 && !drawing ? (
+        {zones.length === 0 ? (
           <section className="mode-card zone-empty-card">
             <span className="mode-label">Home Zone</span>
-            <strong>Draw Home Zone on the map</strong>
-            <p>Set the boundary here anytime — you don’t need to go back through setup.</p>
-            <button type="button" onClick={startDrawing}>Draw Home Zone</button>
+            <strong>Add Home Zone to the map</strong>
+            <p>One tap places a circle. Drag the house to move it, drag the round handle to resize.</p>
+            <button type="button" onClick={addHomeZone}>Add Home Zone</button>
           </section>
-        ) : null}
+        ) : (
+          <section className="mode-card zone-manager">
+            <span className="mode-label">Home Zone</span>
+            <ul className="zone-list">
+              {zones.map((zone) => {
+                const radius = Math.round(zoneRadiusM(zone.points));
+                return (
+                  <li key={zone.id}>
+                    <span className="zone-swatch" style={{ background: zone.color }} aria-hidden="true" />
+                    <div>
+                      <strong>{zone.name}</strong>
+                      <label className="zone-radius-slider">
+                        <span>Size · {radius} m</span>
+                        <input
+                          type="range"
+                          min={50}
+                          max={400}
+                          step={10}
+                          value={Math.min(400, Math.max(50, radius))}
+                          onChange={(event) => void resizeZone(zone, Number(event.target.value))}
+                          aria-label={`Resize ${zone.name}`}
+                        />
+                      </label>
+                    </div>
+                    {confirmZoneDeleteId === zone.id ? (
+                      <span className="zone-delete-confirm">
+                        <button type="button" className="danger" onClick={() => removeZone(zone.id)}>Delete</button>
+                        <button type="button" className="ghost" onClick={() => setConfirmZoneDeleteId(null)}>Keep</button>
+                      </span>
+                    ) : (
+                      <button type="button" className="ghost" onClick={() => setConfirmZoneDeleteId(zone.id)}>
+                        Delete
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            <p>On the map: drag ⌂ to move the whole circle, or drag ⇔ to resize. Or use the size slider above.</p>
+            <button type="button" className="secondary" onClick={addHomeZone}>Add another zone</button>
+          </section>
+        )}
 
         {otherViewers.length > 0 ? (
           <p className="presence-badge">{otherViewers.map((viewer) => viewer.label).join(", ")} is also watching.</p>
@@ -1979,8 +2075,8 @@ function CaregiverView() {
         />
 
         <section className="daily-actions">
-          <button type="button" onClick={startDrawing}>
-            {zones.length === 0 ? "Draw Home Zone" : "Edit Home Zone"}
+          <button type="button" onClick={addHomeZone}>
+            {zones.length === 0 ? "Add Home Zone" : "Add another zone"}
           </button>
           <button type="button" className="secondary" onClick={() => setTileMode(tileMode === "normal" ? "satellite" : "normal")}>
             {tileMode === "normal" ? "Satellite map" : "Normal map"}
@@ -2019,18 +2115,18 @@ function CaregiverView() {
         <div className="map-toolbar">
           <span>{zones.length === 0 ? "No Home Zone yet" : tileMode === "satellite" ? "Satellite" : "Street map"}</span>
           <div className="map-toolbar-actions">
-            <button type="button" onClick={startDrawing}>
-              {drawing ? "Drawing…" : zones.length === 0 ? "Draw Home Zone" : "Edit Home Zone"}
+            <button type="button" onClick={addHomeZone}>
+              {zones.length === 0 ? "Add Home Zone" : "Add zone"}
             </button>
             <button type="button" className="secondary" onClick={() => setTileMode(tileMode === "normal" ? "satellite" : "normal")}>
               {tileMode === "normal" ? "Satellite" : "Street"}
             </button>
           </div>
         </div>
-        {zones.length === 0 && !drawing ? (
+        {zones.length === 0 ? (
           <div className="map-empty-hint">
-            <strong>Draw Home Zone on the map</strong>
-            <span>Tap corners around home, then close the shape to save.</span>
+            <strong>Add Home Zone</strong>
+            <span>One tap places a circle you can drag and resize — no drawing needed.</span>
           </div>
         ) : null}
         <div ref={mapElementRef} className="map" />
