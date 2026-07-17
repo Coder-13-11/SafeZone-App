@@ -928,14 +928,6 @@ function CaregiverView() {
   const [demoStep, setDemoStep] = useState(0);
   const [demoRunning, setDemoRunning] = useState(false);
   const [demoResolved, setDemoResolved] = useState(false);
-  const practiceRequested = initialQuery.get("practice") === "1";
-  const [practiceStep, setPracticeStep] = useState<
-    "idle" | "intro" | "alert" | "responded" | "resolved" | "done"
-  >(() => {
-    if (!practiceRequested) return "idle";
-    if (window.localStorage.getItem("safezone-practice-complete") === householdId) return "done";
-    return "intro";
-  });
   const [livePairUrl, setLivePairUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [profileStatus, setProfileStatus] = useState("");
@@ -1616,81 +1608,9 @@ function CaregiverView() {
         setCareHistory((current) => [response, ...current]);
       }
 
-      if (practiceStep === "alert" && action === "going") {
-        setPracticeStep("responded");
-        window.setTimeout(() => completePracticeReturn(), 1200);
-      }
     } catch (error) {
       setError(error instanceof Error ? error.message : "SafeZone could not share your response.");
     }
-  }
-
-  function skipPractice() {
-    window.localStorage.setItem("safezone-practice-complete", householdId);
-    setPracticeStep("done");
-    const url = new URL(window.location.href);
-    url.searchParams.delete("practice");
-    window.history.replaceState({}, "", url.toString());
-  }
-
-  function startPracticeAlert() {
-    const center = zones[0]?.points[0] || { lat: 37.7749, lng: -122.4194 };
-    const timestamp = new Date().toISOString();
-    const alertPing: LocationPing = {
-      id: `practice-alert-${Date.now()}`,
-      householdId,
-      lat: center.lat + 0.0015,
-      lng: center.lng + 0.0009,
-      accuracy: 8,
-      battery: 84,
-      timestamp,
-      stateAtTime: "alert",
-      zoneId: zones[0]?.id || null,
-      distanceToBoundaryM: 40,
-      graceEndsAt: null
-    };
-    setCareResponse(null);
-    setCareDeclines([]);
-    setDemoResolved(false);
-    setLivePing(alertPing);
-    setHistory((current) => [...current, alertPing]);
-    setSmoothedLocation({ lat: alertPing.lat, lng: alertPing.lng });
-    previousStateRef.current = "alert";
-    setPracticeStep("alert");
-    setConnectionState("live");
-  }
-
-  function completePracticeReturn() {
-    const center = zones[0]?.points[0] || { lat: 37.7749, lng: -122.4194 };
-    const timestamp = new Date().toISOString();
-    const safePing: LocationPing = {
-      id: `practice-safe-${Date.now()}`,
-      householdId,
-      lat: center.lat,
-      lng: center.lng,
-      accuracy: 7,
-      battery: 84,
-      timestamp,
-      stateAtTime: "safe",
-      zoneId: zones[0]?.id || null,
-      distanceToBoundaryM: 5,
-      graceEndsAt: null
-    };
-    setLivePing(safePing);
-    setHistory((current) => [...current, safePing]);
-    setSmoothedLocation({ lat: safePing.lat, lng: safePing.lng });
-    setCareResponse(null);
-    setCareDeclines([]);
-    setDemoResolved(true);
-    previousStateRef.current = "safe";
-    setPracticeStep("resolved");
-    window.localStorage.setItem("safezone-practice-complete", householdId);
-    window.setTimeout(() => {
-      setPracticeStep("done");
-      const url = new URL(window.location.href);
-      url.searchParams.delete("practice");
-      window.history.replaceState({}, "", url.toString());
-    }, 2800);
   }
 
   async function runGuidedDemo() {
@@ -1818,50 +1738,6 @@ function CaregiverView() {
       demoMode={demoMode}
       householdId={householdId}
     >
-      {practiceStep === "intro" || practiceStep === "alert" || practiceStep === "responded" || practiceStep === "resolved" ? (
-        <section className="practice-overlay" aria-label="Practice alert">
-          <div className="practice-card">
-            <span className="practice-badge">Practice · not a real emergency</span>
-            {practiceStep === "intro" ? (
-              <>
-                <h2>See how an alert works</h2>
-                <p>
-                  We’ll simulate {patientName || "your loved one"} leaving Home Zone on this real dashboard, so you can practice claiming the response.
-                </p>
-                <div className="practice-actions">
-                  <button type="button" onClick={startPracticeAlert}>Start practice alert</button>
-                  <button type="button" className="secondary" onClick={skipPractice}>Skip for now</button>
-                </div>
-              </>
-            ) : null}
-            {practiceStep === "alert" ? (
-              <>
-                <h2>{patientName || "Your loved one"} needs attention</h2>
-                <p>Choose what you would do. Other family members would see your choice instantly.</p>
-                <AlertDecisionActions
-                  alertActive
-                  currentCaregiver={caregiverLabel}
-                  response={careResponse}
-                  declines={careDeclines}
-                  onAction={submitCareAction}
-                />
-              </>
-            ) : null}
-            {practiceStep === "responded" ? (
-              <>
-                <h2>You’re responding</h2>
-                <p>The care circle now knows who is handling it. Watching the return home…</p>
-              </>
-            ) : null}
-            {practiceStep === "resolved" ? (
-              <>
-                <h2>Resolved</h2>
-                <p>{patientName || "Your loved one"} is back inside Home Zone. You’re ready for a real alert.</p>
-              </>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
       {caregiverLiveMode ? (
         <section className="demo-director" aria-label="Live tracker controls">
           <div className="demo-director-copy">
@@ -2033,7 +1909,7 @@ function CaregiverView() {
           graceEndsAt={livePing?.graceEndsAt || null}
           response={careResponse}
           declines={careDeclines}
-          resolved={demoResolved || practiceStep === "resolved"}
+          resolved={demoResolved}
           demoMode={false}
           currentCaregiver={caregiverLabel}
           onCareAction={submitCareAction}

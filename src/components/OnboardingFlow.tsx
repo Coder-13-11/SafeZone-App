@@ -375,7 +375,7 @@ export function OnboardingFlow() {
     window.localStorage.setItem("safezone-patient-name", patientName.trim());
     window.localStorage.setItem("safezone-setup-complete", household.id);
     window.localStorage.removeItem("safezone-onboarding-draft");
-    window.location.assign(`/caregiver?household=${household.id}&practice=1`);
+    window.location.assign(`/caregiver?household=${household.id}`);
   }
 
     return (

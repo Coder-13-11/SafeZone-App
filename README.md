@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-Open `/` → **Try SafeZone** → finish onboarding → complete the one-time **practice alert** on the real dashboard (`I’m going` / `I can’t` / `Take over`).
+Open `/` → **Try SafeZone** → finish onboarding → you land on the real caregiver dashboard.
 
 ## Production build
 
@@ -173,9 +173,8 @@ Health check: `GET /api/health`
 
 1. Open the landing page and click **Try SafeZone**.
 2. Complete real onboarding (names → Home Zone → QR pair → alerts).
-3. On the dashboard practice alert, tap **I’m going**, then show resolution.
-4. Share the care-circle invite link; open a second browser as another caregiver and show **I can’t** / **Take over**.
-5. Pair a patient phone and walk a real exit → alert → family response → return home.
+3. Share the care-circle invite link; open a second browser as another caregiver and show **I can’t** / **Take over**.
+4. Pair a patient phone and walk a real exit → alert → family response → return home.
 
 ## Important deployment notes
 
