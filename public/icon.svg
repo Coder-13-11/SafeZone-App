@@ -1,8 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="SafeZone icon">
-  <rect width="512" height="512" rx="112" fill="#0d2426"/>
-  <circle cx="256" cy="246" r="152" fill="#8fbf9f" opacity="0.18"/>
-  <path fill="#9fcfb1" d="M256 78c83 0 150 67 150 150 0 119-150 211-150 211S106 347 106 228C106 145 173 78 256 78Z"/>
-  <circle cx="256" cy="228" r="70" fill="#0d2426"/>
-  <circle cx="256" cy="228" r="32" fill="#f5f1e8"/>
-  <path fill="#f2b35d" d="M256 132a96 96 0 0 1 96 96h-28a68 68 0 0 0-68-68v-28Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Navora icon">
+  <rect width="512" height="512" rx="112" fill="#0a2b27"/>
+  <!-- Two linked circles: the caregiver and the loved one, always connected -->
+  <circle cx="205" cy="256" r="108" fill="none" stroke="#b7d8c4" stroke-width="30"/>
+  <circle cx="322" cy="256" r="108" fill="none" stroke="#e6b566" stroke-width="30" opacity="0.9"/>
+  <circle cx="263" cy="256" r="26" fill="#f8f3e8"/>
 </svg>

@@ -48,14 +48,14 @@ self.addEventListener("push", (event) => {
   const payload = event.data
     ? event.data.json()
     : {
-        title: "SafeZone alert",
+        title: "Navora alert",
         body: "The patient device appears to have left the safe zone.",
         data: { url: "/caregiver" }
       };
 
   event.waitUntil(
-    self.registration.showNotification(payload.title || "SafeZone alert", {
-      body: payload.body || "Open SafeZone for details.",
+    self.registration.showNotification(payload.title || "Navora alert", {
+      body: payload.body || "Open Navora for details.",
       icon: "/icon.svg",
       badge: "/icon.svg",
       data: payload.data || { url: "/caregiver" },

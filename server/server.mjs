@@ -310,7 +310,7 @@ async function sendBoundaryPush(household, ping) {
   }
 
   const payload = JSON.stringify({
-    title: "SafeZone alert",
+    title: "Navora alert",
     body: `${household.patientName} appears to have left the safe zone.`,
     data: {
       url: "/caregiver",
@@ -755,7 +755,7 @@ if (existsSync(distDir)) {
 }
 
 server.listen(port, () => {
-  console.log(`SafeZone backend listening on http://localhost:${port}`);
+  console.log(`Navora backend listening on http://localhost:${port}`);
   console.log(`Web Push keys loaded from ${vapidKeys.source}.`);
 });
 
@@ -763,7 +763,7 @@ let shuttingDown = false;
 async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`${signal} received. Saving SafeZone state...`);
+  console.log(`${signal} received. Saving Navora state...`);
 
   for (const client of wss.clients) {
     client.close(1001, "Server restarting");

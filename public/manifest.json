@@ -1,12 +1,12 @@
 {
-  "name": "SafeZone",
-  "short_name": "SafeZone",
-  "description": "A browser-based safety app for families caring for someone with dementia.",
+  "name": "Navora",
+  "short_name": "Navora",
+  "description": "A compassionate safety companion for families caring for a loved one with dementia.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#0d2426",
-  "theme_color": "#0d2426",
+  "background_color": "#0a2b27",
+  "theme_color": "#0a2b27",
   "orientation": "portrait",
   "icons": [
     {

@@ -230,7 +230,7 @@ function humanSafetyCopy(
       eyebrow: "No location yet",
       headline: `Waiting for ${patientName}’s phone`,
       detail: "The patient phone is connected, but it has not shared a location yet.",
-      reassurance: "On that phone, open SafeZone and allow location access."
+      reassurance: "On that phone, open Navora and allow location access."
     };
   }
 
@@ -239,7 +239,7 @@ function humanSafetyCopy(
       eyebrow: "Signal is stale",
       headline: `${patientName}’s location is delayed`,
       detail: "The map shows the last location received, not necessarily where they are now.",
-      reassurance: "Check that the patient phone is charged, online, and has SafeZone open."
+      reassurance: "Check that the patient phone is charged, online, and has Navora open."
     };
   }
 
@@ -256,7 +256,7 @@ function humanSafetyCopy(
     return {
       eyebrow: STATE_CHIP_LABEL.grace,
       headline: `${patientName} may be leaving Home Zone`,
-      detail: "SafeZone received a location outside Home Zone and is waiting briefly for another reading.",
+      detail: "Navora received a location outside Home Zone and is waiting briefly for another reading.",
       reassurance: "No confirmed alert yet — this is the confirmation step before family is notified."
     };
   }
@@ -274,16 +274,16 @@ function humanSafetyCopy(
     return {
       eyebrow: "Setup incomplete",
       headline: "Home Zone is not active",
-      detail: `SafeZone has ${patientName}’s location, but no active boundary is available to evaluate it.`,
+      detail: `Navora has ${patientName}’s location, but no active boundary is available to evaluate it.`,
       reassurance: "Create Home Zone before relying on boundary alerts."
     };
   }
 
   return {
     eyebrow: STATE_CHIP_LABEL.safe,
-    headline: `${patientName} is inside Home Zone`,
-    detail: "The latest location reported by the patient phone is inside the active boundary.",
-    reassurance: "Family will be notified if a confirmed crossing is reported."
+    headline: `${patientName} is safe at home`,
+    detail: "Everything looks okay. The latest update places them inside Home Zone.",
+    reassurance: "You don’t need to do anything — Navora will tell the family if that changes."
   };
 }
 
@@ -669,7 +669,7 @@ function PatientView() {
                 body: JSON.stringify(ping)
               }).then(async (response) => {
                 const result = await response.json();
-                if (!response.ok) throw new Error(result.error || "SafeZone could not accept this location.");
+                if (!response.ok) throw new Error(result.error || "Navora could not accept this location.");
                 return result as { state: GeofenceState; previousState: GeofenceState; graceEndsAt?: string | null };
               });
 
@@ -720,8 +720,8 @@ function PatientView() {
           setTrackingState("error");
           setMessage(
             caught instanceof Error
-              ? `${caught.message} SafeZone will keep trying while this page is open.`
-              : "SafeZone cannot reach the care circle. Check this phone’s internet connection; it will keep trying."
+              ? `${caught.message} Navora will keep trying while this page is open.`
+              : "Navora cannot reach the care circle. Check this phone’s internet connection; it will keep trying."
           );
         }
       },
@@ -729,7 +729,7 @@ function PatientView() {
         setTrackingState(error.code === error.PERMISSION_DENIED ? "blocked" : "error");
         setMessage(
           error.code === error.PERMISSION_DENIED
-            ? "Location access is off. Allow location for SafeZone in this browser’s settings, then try again."
+            ? "Location access is off. Allow location for Navora in this browser’s settings, then try again."
             : "This phone cannot get a location right now. Move near a window or outdoors, then try again."
         );
       },
@@ -746,12 +746,12 @@ function PatientView() {
   if (activationState !== "paired") {
     return (
       <main className="patient-activation">
-        <a href="/" className="brand-lockup"><span className="brand-mark"><span /><span /><span /></span><span>SafeZone</span></a>
+        <a href="/" className="brand-lockup"><span className="brand-mark"><span /><span /><span /></span><span>Navora</span></a>
         <section>
           <div className={`activation-symbol ${activationState}`} aria-hidden="true">
             {activationState === "checking" ? "…" : activationState === "error" ? "!" : "⌁"}
           </div>
-          <p className="eyebrow">SafeZone phone setup</p>
+          <p className="eyebrow">Navora phone setup</p>
           <h1>
             {activationState === "checking" ? "Connecting to your family…" : "Scan the caregiver’s pairing code"}
           </h1>
@@ -803,7 +803,7 @@ function PatientView() {
             symbol: "!",
             eyebrow: "ACTION NEEDED",
             headline: "Location access is off",
-            detail: "SafeZone cannot update the family until location access is allowed on this phone."
+            detail: "Navora cannot update the family until location access is allowed on this phone."
           }
         : trackingState === "error"
           ? {
@@ -823,8 +823,8 @@ function PatientView() {
     <main className="patient-screen">
       <section className={`patient-card ${classForState(serverState)}`}>
         <header className="patient-device-header">
-          <span className="brand-lockup"><span className="brand-mark"><span /><span /><span /></span><span>SafeZone</span></span>
-          <span>SafeZone phone</span>
+          <span className="brand-lockup"><span className="brand-mark"><span /><span /><span /></span><span>Navora</span></span>
+          <span>Navora phone</span>
         </header>
         <div className={`patient-primary-state ${trackingState}`} role="status" aria-live="polite">
           <span className="patient-state-symbol" aria-hidden="true">{patientPresentation.symbol}</span>
@@ -842,12 +842,12 @@ function PatientView() {
           <p>
             <span>1</span><strong>Keep this page open</strong>
             {wakeLockEngaged
-              ? "SafeZone is keeping this screen awake so tracking never pauses. Just leave the page open."
+              ? "Navora is keeping this screen awake so tracking never pauses. Just leave the page open."
               : "This browser page must remain open for continuous web location sharing."}
           </p>
-          <p><span>2</span><strong>Add to Home Screen</strong>On iPhone, use Share → Add to Home Screen so SafeZone is easy to reopen.</p>
+          <p><span>2</span><strong>Add to Home Screen</strong>On iPhone, use Share → Add to Home Screen so Navora is easy to reopen.</p>
           <p><span>3</span><strong>Keep the phone charged</strong>Leave the phone with {patientName || "the person being cared for"}.</p>
-          <p><span>4</span><strong>Family sees updates—not surveillance</strong>SafeZone shares reported location and accuracy with the connected care circle.</p>
+          <p><span>4</span><strong>Family sees updates—not surveillance</strong>Navora shares reported location and accuracy with the connected care circle.</p>
         </div>
         <details className="patient-device-details">
           <summary>Device and location details</summary>
@@ -1503,7 +1503,7 @@ function CaregiverView() {
             body: JSON.stringify({ caregiverName, patientName: lovedOneName })
           }).then(async (response) => {
             const result = await response.json();
-            if (!response.ok) throw new Error(result.error || "SafeZone could not save these names.");
+            if (!response.ok) throw new Error(result.error || "Navora could not save these names.");
             return result.household;
           });
       setCaregiverLabel(household.caregiverName);
@@ -1512,7 +1512,7 @@ function CaregiverView() {
       window.localStorage.setItem("safezone-patient-name", household.patientName);
       setProfileStatus("Names updated for this care circle.");
     } catch (caught) {
-      setProfileStatus(caught instanceof Error ? caught.message : "SafeZone could not save these names.");
+      setProfileStatus(caught instanceof Error ? caught.message : "Navora could not save these names.");
     }
   }
 
@@ -1531,7 +1531,7 @@ function CaregiverView() {
         window.matchMedia("(display-mode: standalone)").matches ||
         Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
       if (isIOS && !isStandalone) {
-        setPushStatus("On iPhone, tap Share → Add to Home Screen, then reopen SafeZone from its icon.");
+        setPushStatus("On iPhone, tap Share → Add to Home Screen, then reopen Navora from its icon.");
         return;
       }
 
@@ -1544,10 +1544,10 @@ function CaregiverView() {
       let publicKey = vapidPublicKey;
       if (!supabaseEnabled) {
         const keyResponse = await fetch(apiUrl("/api/vapid-public-key"));
-        if (!keyResponse.ok) throw new Error("Notifications are not configured on this SafeZone deployment.");
+        if (!keyResponse.ok) throw new Error("Notifications are not configured on this Navora deployment.");
         publicKey = ((await keyResponse.json()) as { publicKey: string }).publicKey;
       }
-      if (!publicKey) throw new Error("Notifications are not configured on this SafeZone deployment.");
+      if (!publicKey) throw new Error("Notifications are not configured on this Navora deployment.");
 
       const existing = await activeRegistration.pushManager.getSubscription();
       const subscriptionObject =
@@ -1571,7 +1571,7 @@ function CaregiverView() {
         });
         if (!subscribeResponse.ok) {
           const result = await subscribeResponse.json().catch(() => null);
-          throw new Error(result?.error || "SafeZone could not finish notification setup.");
+          throw new Error(result?.error || "Navora could not finish notification setup.");
         }
       }
 
@@ -1596,7 +1596,7 @@ function CaregiverView() {
                 action
               })
             }).then(async (result) => {
-              if (!result.ok) throw new Error("SafeZone could not share your response.");
+              if (!result.ok) throw new Error("Navora could not share your response.");
               return ((await result.json()) as { response: CareResponse }).response;
             });
 
@@ -1609,7 +1609,7 @@ function CaregiverView() {
       }
 
     } catch (error) {
-      setError(error instanceof Error ? error.message : "SafeZone could not share your response.");
+      setError(error instanceof Error ? error.message : "Navora could not share your response.");
     }
   }
 
@@ -1742,7 +1742,7 @@ function CaregiverView() {
         <section className="demo-director" aria-label="Live tracker controls">
           <div className="demo-director-copy">
             <span className="demo-label"><i /> Live tracker</span>
-            <strong>Pair a phone or simulate a path to test SafeZone</strong>
+            <strong>Pair a phone or simulate a path to test Navora</strong>
           </div>
           <button type="button" onClick={runGuidedDemo} disabled={demoRunning}>
             {demoRunning ? "Simulating…" : "Simulate exit path"}
@@ -1793,11 +1793,11 @@ function CaregiverView() {
           <div className="activity-layout">
             <HumanTimeline history={history} responseHistory={careHistory} />
             <section className="dashboard-card insight-card">
-              <div className="dashboard-card-heading"><div><span>Pattern summary</span><h2>What SafeZone observed</h2></div></div>
+              <div className="dashboard-card-heading"><div><span>Pattern summary</span><h2>What Navora observed</h2></div></div>
               <div className="insight-hero"><span>{safePercentage || "—"}{history.length ? "%" : ""}</span><p>of received updates were safely inside Home Zone.</p></div>
               <div className="insight-row"><span>Boundary activity</span><strong>{boundaryEvents === 0 ? "No crossings recorded" : `${boundaryEvents} meaningful event${boundaryEvents === 1 ? "" : "s"}`}</strong></div>
               <div className="insight-row"><span>Latest signal</span><strong>{freshnessLabel(livePing)}</strong></div>
-              <p className="insight-note">SafeZone summarizes observed location states only. It does not predict wandering behavior.</p>
+              <p className="insight-note">Navora summarizes observed location states only. It does not predict wandering behavior.</p>
             </section>
           </div>
         </div>
@@ -1818,7 +1818,7 @@ function CaregiverView() {
           </div>
           <section className="dashboard-card family-explainer">
             <span className="family-explainer-icon">◎</span>
-            <div><small>ONE SHARED TRUTH</small><h2>Everyone sees the same safety state.</h2><p>When something happens, SafeZone shows who is viewing and who has taken responsibility—without a frantic group-text thread.</p></div>
+            <div><small>ONE SHARED TRUTH</small><h2>Everyone sees the same safety state.</h2><p>When something happens, Navora shows who is viewing and who has taken responsibility—without a frantic group-text thread.</p></div>
           </section>
         </div>
       ) : activeView === "settings" ? (
@@ -1846,7 +1846,7 @@ function CaregiverView() {
             <div className="dashboard-card-heading"><div><span>Notifications</span><h2>Alert readiness</h2></div><span className={`device-status ${notificationReady ? "paired" : ""}`}><i />{notificationReady ? "Ready" : "Needs setup"}</span></div>
             <p>See boundary warnings while the dashboard is open and receive a background notification after a confirmed crossing.</p>
             <button type="button" onClick={subscribeToPush}>{notificationReady ? "Refresh notification setup" : "Enable notifications"}</button>
-            <p className="settings-footnote">On iPhone, install SafeZone to the Home Screen first for background Web Push.</p>
+            <p className="settings-footnote">On iPhone, install Navora to the Home Screen first for background Web Push.</p>
           </section>
           <section className="dashboard-card settings-section">
             <div className="dashboard-card-heading"><div><span>Calm alerts</span><h2>Repeat-alert cooldown</h2></div></div>
@@ -1879,20 +1879,20 @@ function CaregiverView() {
                 </span>
               </div>
               <p>
-                SafeZone only receives location while the patient browser page stays open. While the page is open, SafeZone keeps the
+                Navora only receives location while the patient browser page stays open. While the page is open, Navora keeps the
                 screen awake automatically, and any updates missed offline are saved on the phone and sent once it reconnects.
               </p>
               <ol className="recovery-steps">
-                <li>Open SafeZone on {patientName || "the patient"}&apos;s phone from the Home Screen shortcut.</li>
+                <li>Open Navora on {patientName || "the patient"}&apos;s phone from the Home Screen shortcut.</li>
                 <li>Keep that page open and leave the phone charged and online.</li>
-                <li>Confirm location permission is allowed for SafeZone in browser settings.</li>
+                <li>Confirm location permission is allowed for Navora in browser settings.</li>
                 <li>If pairing was lost, return to Family and scan a new one-time QR code.</li>
               </ol>
               <p className="settings-footnote">The dashboard shows the last known location until a fresh ping arrives.</p>
             </section>
           ) : null}
           <section className="dashboard-card settings-section honesty-setting">
-            <span>◉</span><div><h3>Honest location, always</h3><p>SafeZone displays the accuracy radius supplied by the patient phone and never claims indoor or room-level precision.</p></div>
+            <span>◉</span><div><h3>Honest location, always</h3><p>Navora displays the accuracy radius supplied by the patient phone and never claims indoor or room-level precision.</p></div>
           </section>
         </div>
       ) : (
@@ -2007,7 +2007,7 @@ function CaregiverView() {
           </div>
           <p>{pushStatus}</p>
           <p className="ios-note">
-            iOS Safari can receive background web push only after SafeZone is added to the Home Screen as a PWA.
+            iOS Safari can receive background web push only after Navora is added to the Home Screen as a PWA.
           </p>
           {livePing?.graceEndsAt ? <p>Grace period ends at {new Date(livePing.graceEndsAt).toLocaleTimeString()}.</p> : null}
         </details>

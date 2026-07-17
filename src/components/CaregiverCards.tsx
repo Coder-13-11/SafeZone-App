@@ -185,7 +185,7 @@ export function SafetyHeroCard({
             declines={declines}
             onAction={onCareAction}
           />
-          <small>If there may be immediate danger, contact local emergency services. SafeZone does not dispatch help.</small>
+          <small>If there may be immediate danger, contact local emergency services. Navora does not dispatch help.</small>
         </div>
       ) : state === "caution" || state === "grace" ? (
         <a className="safety-map-link" href={caregiverHref("map", demoMode)}>

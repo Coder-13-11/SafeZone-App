@@ -11,7 +11,7 @@ export function loadHouseholds(filePath) {
     const parsed = JSON.parse(readFileSync(filePath, "utf8"));
     return Array.isArray(parsed.households) ? parsed.households : [];
   } catch (error) {
-    console.error(`Could not read persisted SafeZone data at ${filePath}`, error);
+    console.error(`Could not read persisted Navora data at ${filePath}`, error);
     return [];
   }
 }
@@ -64,7 +64,7 @@ export function createPersistence(filePath) {
     pendingSnapshot = null;
     activeWrite = activeWrite
       .then(() => writeSnapshot(snapshot))
-      .catch((error) => console.error("SafeZone persistence failed", error));
+      .catch((error) => console.error("Navora persistence failed", error));
     return activeWrite;
   }
 

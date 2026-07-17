@@ -44,7 +44,7 @@ export function calculateCareConfidence(
       score: 0,
       level: "attention",
       label: "Location unavailable",
-      summary: "Open SafeZone on the patient phone and allow location access.",
+      summary: "Open Navora on the patient phone and allow location access.",
       details: [
         { label: "Location", value: "Not available", healthy: false },
         { label: "Connection", value: connection === "live" ? "Connected" : "Not connected", healthy: false }

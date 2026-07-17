@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { useSafeZoneSession } from "../lib/auth";
+import { useNavoraSession } from "../lib/auth";
 import { loadPrimaryHousehold, supabaseEnabled } from "../lib/supabase";
 
 export function CaregiverBootstrap({ children }: { children: ReactNode }) {
-  const { authenticated, loading: authLoading } = useSafeZoneSession();
+  const { authenticated, loading: authLoading } = useNavoraSession();
   const [ready, setReady] = useState(!supabaseEnabled);
   const [message, setMessage] = useState("Restoring your care circle…");
   const isDemo = new URLSearchParams(window.location.search).get("demo") === "1";
@@ -46,7 +46,7 @@ export function CaregiverBootstrap({ children }: { children: ReactNode }) {
         setReady(true);
       })
       .catch((caught) => {
-        setMessage(caught instanceof Error ? caught.message : "SafeZone could not restore your care circle.");
+        setMessage(caught instanceof Error ? caught.message : "Navora could not restore your care circle.");
       });
   }, [authenticated, authLoading, isDemo]);
 
@@ -54,7 +54,7 @@ export function CaregiverBootstrap({ children }: { children: ReactNode }) {
     return (
       <main className="auth-screen">
         <section className="auth-card">
-          <p className="eyebrow">SafeZone</p>
+          <p className="eyebrow">Navora</p>
           <h1>Loading your family setup</h1>
           <p role="status">{message}</p>
         </section>

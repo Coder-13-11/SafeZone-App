@@ -113,16 +113,16 @@ export function PatientPairingCard({
             <h3>One scan. No password.</h3>
             {pairingURL && !pairingURL.startsWith("https://") ? (
               <p className="pairing-host-warning" role="alert">
-                <strong>Deploy SafeZone with HTTPS before using this code on another phone.</strong>
+                <strong>Deploy Navora with HTTPS before using this code on another phone.</strong>
                 Configure PUBLIC_URL with the shared HTTPS address, then generate a new code.
               </p>
             ) : null}
-            <ol><li>Open the phone camera</li><li>Scan this QR code</li><li>Allow location on the SafeZone page</li></ol>
+            <ol><li>Open the phone camera</li><li>Scan this QR code</li><li>Allow location on the Navora page</li></ol>
             {shortCode ? (
               <div className="manual-code-callout">
                 <span>
                   Camera not working? On the patient phone open{" "}
-                  <strong>{pairingURL ? `${new URL(pairingURL).host}/patient` : "the SafeZone patient page"}</strong> and type:
+                  <strong>{pairingURL ? `${new URL(pairingURL).host}/patient` : "the Navora patient page"}</strong> and type:
                 </span>
                 <strong className="manual-code">{shortCode.slice(0, 3)} {shortCode.slice(3)}</strong>
               </div>

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { SafeZoneMark } from "./WelcomeView";
+import { NavoraMark } from "./WelcomeView";
 import { caregiverHref } from "../safetyLanguage";
 
 export type DashboardView = "overview" | "map" | "activity" | "family" | "settings";
@@ -34,13 +34,13 @@ export function DashboardShell({
     map: { eyebrow: "Live location", title: `Where ${patientName} is now` },
     activity: { eyebrow: "Care history", title: "Emergency timeline" },
     family: { eyebrow: "Shared care", title: "Your care circle" },
-    settings: { eyebrow: "Preferences", title: "SafeZone settings" }
+    settings: { eyebrow: "Preferences", title: "Navora settings" }
   };
 
   return (
     <main className="dashboard-shell">
       <aside className="dashboard-rail">
-        <a href="/" className="dashboard-brand"><SafeZoneMark /><span>SafeZone</span></a>
+        <a href="/" className="dashboard-brand"><NavoraMark /><span>Navora</span></a>
         <nav aria-label="Caregiver dashboard">
           {navigation.map((item) => (
             <a

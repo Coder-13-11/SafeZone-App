@@ -10,7 +10,7 @@ import {
   verifyEmailOtp
 } from "./supabase";
 
-export function useSafeZoneSession() {
+export function useNavoraSession() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(supabaseEnabled);
   const [authError, setAuthError] = useState<string | null>(null);

@@ -1,11 +1,11 @@
-# SafeZone
+# Navora
 
-SafeZone is a browser-based safety app for families caring for someone with dementia. It turns two devices a family already owns into a shared safety system:
+Navora is a browser-based safety app for families caring for someone with dementia. It turns two devices a family already owns into a shared safety system:
 
 - The **patient device** securely streams its browser-provided location.
 - The **caregiver device** answers three questions immediately: Are they safe? Where are they? Do I need to act?
 
-SafeZone does not claim room-level precision. The caregiver map always displays the GPS accuracy radius reported by the patient device.
+Navora does not claim room-level precision. The caregiver map always displays the GPS accuracy radius reported by the patient device.
 
 ## Local development
 
@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-Open `/` → **Try SafeZone** → finish onboarding → you land on the real caregiver dashboard.
+Open `/` → **Try Navora** → finish onboarding → you land on the real caregiver dashboard.
 
 ## Production build
 
@@ -51,7 +51,7 @@ Scanning a QR code from a separate patient phone therefore requires an HTTPS dep
 
 - **App:** https://safe-zone-app.vercel.app
 - **Supabase project:** `rjlvxopxrfljhcftuqpw` → https://rjlvxopxrfljhcftuqpw.supabase.co
-- **GitHub:** https://github.com/Coder-13-11/SafeZone-App
+- **GitHub:** https://github.com/Coder-13-11/Navora-App
 
 Vercel build env vars are configured in `vercel.json`. Pushing to `main` redeploys automatically.
 
@@ -141,11 +141,11 @@ npm run build
 
 `vercel.json` is included for SPA routing and service-worker cache headers.
 
-When these Vercel variables exist, SafeZone automatically uses Supabase Auth, Postgres, Edge Functions, and Realtime instead of the local Express JSON prototype.
+When these Vercel variables exist, Navora automatically uses Supabase Auth, Postgres, Edge Functions, and Realtime instead of the local Express JSON prototype.
 
 ## PWA reliability boundary
 
-SafeZone can make a PWA reliable for accounts, pairing, storage, realtime dashboards, history, and notifications. A PWA cannot continuously collect GPS after iOS or Android suspends or closes the browser/web app. The patient phone must keep SafeZone open and location permission allowed for continuous web location updates.
+Navora can make a PWA reliable for accounts, pairing, storage, realtime dashboards, history, and notifications. A PWA cannot continuously collect GPS after iOS or Android suspends or closes the browser/web app. The patient phone must keep Navora open and location permission allowed for continuous web location updates.
 
 For closed-app background location, build a native patient tracker with iOS Core Location / Android foreground location service and keep the caregiver dashboard as the PWA.
 
@@ -171,7 +171,7 @@ Health check: `GET /api/health`
 
 ## Demo checklist
 
-1. Open the landing page and click **Try SafeZone**.
+1. Open the landing page and click **Try Navora**.
 2. Complete real onboarding (names → Home Zone → QR pair → alerts).
 3. Share the care-circle invite link; open a second browser as another caregiver and show **I can’t** / **Take over**.
 4. Pair a patient phone and walk a real exit → alert → family response → return home.
@@ -182,4 +182,4 @@ Health check: `GET /api/health`
 - Run only one backend instance against a given data file.
 - For horizontal scaling, replace the file persistence and in-memory WebSocket presence with a shared database/pub-sub layer.
 - iOS background Web Push requires installing the PWA to the Home Screen first.
-- Browser background geolocation remains constrained by the operating system; SafeZone does not imply native-app background guarantees.
+- Browser background geolocation remains constrained by the operating system; Navora does not imply native-app background guarantees.

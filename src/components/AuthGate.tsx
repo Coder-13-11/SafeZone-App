@@ -3,14 +3,14 @@ import type React from "react";
 import {
   continueWithoutEmail,
   requestCaregiverLogin,
-  useSafeZoneSession,
+  useNavoraSession,
   verifyCaregiverLogin
 } from "../lib/auth";
 import { supabaseEnabled } from "../lib/supabase";
-import { SafeZoneMark } from "./WelcomeView";
+import { NavoraMark } from "./WelcomeView";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  const { authenticated, loading, authError } = useSafeZoneSession();
+  const { authenticated, loading, authError } = useNavoraSession();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
@@ -33,7 +33,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       setSent(true);
       setStatus("Check your email for a 6-digit code. You can also open the sign-in link in this same browser.");
     } catch (caught) {
-      setStatus(caught instanceof Error ? caught.message : "SafeZone could not send the sign-in email.");
+      setStatus(caught instanceof Error ? caught.message : "Navora could not send the sign-in email.");
     } finally {
       setSending(false);
     }
@@ -70,11 +70,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   return (
     <main className="auth-screen">
       <section className="auth-card">
-        <SafeZoneMark />
+        <NavoraMark />
         <p className="eyebrow">Caregiver sign in</p>
         <h1>{loading ? "Checking your session…" : "Keep your family setup safe."}</h1>
         <p>
-          Sign in once so SafeZone can restore your household, names, Home Zone, alerts, and pairing codes on every
+          Sign in once so Navora can restore your household, names, Home Zone, alerts, and pairing codes on every
           device.
         </p>
         {!loading ? (

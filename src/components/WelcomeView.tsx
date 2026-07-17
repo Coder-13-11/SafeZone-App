@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, createTimeline } from "animejs";
 
-export function SafeZoneMark() {
+export function NavoraMark() {
   return (
     <span className="brand-mark" aria-hidden="true">
       <span />
@@ -114,12 +114,12 @@ function PhoneHeroMockup() {
   }, []);
 
   return (
-    <div className="phone-hero-stage" aria-label="SafeZone product preview">
+    <div className="phone-hero-stage" aria-label="Navora product preview">
       <div className={`phone-mockup phone-state-${current.state}`} ref={phoneRef}>
         <div className="phone-notch" aria-hidden="true" />
         <div className="phone-screen">
           <div className="phone-topbar">
-            <span>SafeZone</span>
+            <span>Navora</span>
             <span className="phone-live-pill">● Live</span>
           </div>
           <div className="phone-map">
@@ -167,28 +167,32 @@ function PhoneHeroMockup() {
 export function WelcomeView() {
   return (
     <main className="story-site">
-      <nav className="story-nav" aria-label="SafeZone">
-        <a href="/" className="brand-lockup"><SafeZoneMark /><span>SafeZone</span></a>
+      <nav className="story-nav" aria-label="Navora">
+        <a href="/" className="brand-lockup"><NavoraMark /><span>Navora</span></a>
         <div className="story-nav-links">
           <a href="#how-it-works">How it works</a>
           <a href="#family">Family response</a>
           <a href="#questions">FAQ</a>
         </div>
-        <a href="/onboarding" className="story-nav-cta">Try SafeZone</a>
+        <a href="/onboarding" className="story-nav-cta">Try Navora</a>
       </nav>
 
       <section className="landing-hero-simple">
-        <p className="landing-eyebrow">Family safety coordination for dementia care</p>
-        <h1>Helping families know when a loved one needs them.</h1>
+        <p className="landing-eyebrow">For families caring for a loved one with dementia</p>
+        <h1>Know they’re safe. Even when you’re not there.</h1>
+        <p className="landing-hero-sub">
+          Navora is a compassionate safety companion: real-time location, a gentle Home Zone boundary,
+          and calm alerts that tell your whole family who’s responding.
+        </p>
         <PhoneHeroMockup />
         <div className="landing-hero-cta">
-          <a href="/onboarding" className="primary-story-cta">Try SafeZone <span>→</span></a>
+          <a href="/onboarding" className="primary-story-cta">Start setup <span>→</span></a>
           <a href="#how-it-works" className="secondary-story-cta">See how it works</a>
         </div>
         <p className="landing-scroll-cue" aria-hidden="true">Scroll to see how it works</p>
       </section>
 
-      <section className="proof-ribbon" aria-label="SafeZone product principles">
+      <section className="proof-ribbon" aria-label="Navora product principles">
         <div><strong>At a glance</strong><span>one clear safety state</span></div>
         <div><strong>2 phones</strong><span>no special hardware</span></div>
         <div><strong>1 response</strong><span>who is handling it</span></div>
@@ -245,7 +249,7 @@ export function WelcomeView() {
           <a href="/onboarding">Create your care circle <span>→</span></a>
         </div>
         <div className="family-response-art">
-          <div className="response-alert"><span>!</span><div><small>SAFEZONE ALERT</small><strong>Mary has left Home Zone</strong><p>2 minutes ago</p></div></div>
+          <div className="response-alert"><span>!</span><div><small>NAVORA ALERT</small><strong>Mary has left Home Zone</strong><p>2 minutes ago</p></div></div>
           <div className="response-family">
             <div><span className="response-avatar sage">S</span><p><strong>Sarah</strong>I’m going</p><i className="active" /></div>
             <div><span className="response-avatar gold">M</span><p><strong>Mike</strong>I can’t</p><i /></div>
@@ -273,20 +277,20 @@ export function WelcomeView() {
           <h2>Questions families ask first.</h2>
         </div>
         <div className="faq-list">
-          <details><summary>How accurate is SafeZone?</summary><p>SafeZone uses browser GPS. The real accuracy radius is always shown — often ±7 m outdoors, wider near buildings.</p></details>
+          <details><summary>How accurate is Navora?</summary><p>Navora uses browser GPS. The real accuracy radius is always shown — often ±7 m outdoors, wider near buildings.</p></details>
           <details><summary>Does the patient need a special tracker?</summary><p>No. A phone your family already owns, connected with one secure QR code.</p></details>
           <details><summary>Can several family members watch together?</summary><p>Yes. Share one invite link. Everyone sees who is responding.</p></details>
         </div>
       </section>
 
       <section className="final-story-cta">
-        <SafeZoneMark />
+        <NavoraMark />
         <h2>Peace of mind before an emergency happens.</h2>
-        <a href="/onboarding">Try SafeZone <span>→</span></a>
+        <a href="/onboarding">Try Navora <span>→</span></a>
       </section>
 
       <footer className="story-footer">
-        <div className="brand-lockup"><SafeZoneMark /><span>SafeZone</span></div>
+        <div className="brand-lockup"><NavoraMark /><span>Navora</span></div>
         <p>Built with care for families navigating dementia.</p>
         <div><a href="#questions">Safety & accuracy</a><a href="/onboarding">Get started</a></div>
       </footer>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import QRCode from "qrcode";
-import { SafeZoneMark } from "./WelcomeView";
+import { NavoraMark } from "./WelcomeView";
 import type { LatLngPoint } from "../types";
 import { AuthGate } from "./AuthGate";
 import {
@@ -129,7 +129,7 @@ export function OnboardingFlow() {
   useEffect(() => {
     if (!household || step !== 3 || paired || qrDataURL) return;
     createPairing(household.id).catch((caught) => {
-      setError(caught instanceof Error ? caught.message : "SafeZone could not create a pairing code.");
+      setError(caught instanceof Error ? caught.message : "Navora could not create a pairing code.");
     });
   }, [household, paired, qrDataURL, step]);
 
@@ -170,7 +170,7 @@ export function OnboardingFlow() {
 
   async function createFamily() {
     if (!caregiverName.trim() || !patientName.trim()) {
-      setError("Please add both names so SafeZone can make every screen personal.");
+      setError("Please add both names so Navora can make every screen personal.");
       return;
     }
 
@@ -201,13 +201,13 @@ export function OnboardingFlow() {
           })
         });
         const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "SafeZone could not create your family.");
+        if (!response.ok) throw new Error(result.error || "Navora could not create your family.");
         setHousehold(result.household);
       }
       setStep(2);
       if (!location) proposeHomeLocation();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "SafeZone could not create your family.");
+      setError(caught instanceof Error ? caught.message : "Navora could not create your family.");
     } finally {
       setLoading(false);
     }
@@ -230,7 +230,7 @@ export function OnboardingFlow() {
         setError(
           geolocationError.code === geolocationError.PERMISSION_DENIED
             ? "Location was not allowed. Enable it in browser settings, or draw Home Zone later."
-            : "SafeZone could not determine this device’s location."
+            : "Navora could not determine this device’s location."
         );
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 }
@@ -267,11 +267,11 @@ export function OnboardingFlow() {
           })
         });
         const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "SafeZone could not save Home Zone.");
+        if (!response.ok) throw new Error(result.error || "Navora could not save Home Zone.");
       }
       setStep(3);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "SafeZone could not save Home Zone.");
+      setError(caught instanceof Error ? caught.message : "Navora could not save Home Zone.");
     } finally {
       setLoading(false);
     }
@@ -286,7 +286,7 @@ export function OnboardingFlow() {
           body: JSON.stringify({ householdId })
         }).then(async (response) => {
           const payload = await response.json();
-          if (!response.ok) throw new Error(payload.error || "SafeZone could not create a pairing code.");
+          if (!response.ok) throw new Error(payload.error || "Navora could not create a pairing code.");
           return payload;
         });
 
@@ -312,10 +312,10 @@ export function OnboardingFlow() {
         window.matchMedia("(display-mode: standalone)").matches ||
         Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
       if (isIOS && !isStandalone) {
-        throw new Error("On iPhone, first tap Share → Add to Home Screen. Reopen SafeZone from the new icon, then enable notifications.");
+        throw new Error("On iPhone, first tap Share → Add to Home Screen. Reopen Navora from the new icon, then enable notifications.");
       }
       if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-        throw new Error("This browser does not support Web Push. SafeZone will still work while open.");
+        throw new Error("This browser does not support Web Push. Navora will still work while open.");
       }
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
@@ -327,12 +327,12 @@ export function OnboardingFlow() {
       if (!supabaseEnabled) {
         const keyResponse = await fetch("/api/vapid-public-key");
         if (!keyResponse.ok) {
-          throw new Error("Notifications are not available on this SafeZone deployment yet.");
+          throw new Error("Notifications are not available on this Navora deployment yet.");
         }
         publicKey = (await keyResponse.json()).publicKey;
       }
       if (!publicKey) {
-        throw new Error("Notifications are not available on this SafeZone deployment yet.");
+        throw new Error("Notifications are not available on this Navora deployment yet.");
       }
       const existing = await registration.pushManager.getSubscription();
       const subscriptionObject =
@@ -357,7 +357,7 @@ export function OnboardingFlow() {
         });
         if (!subscribeResponse.ok) {
           const result = await subscribeResponse.json().catch(() => null);
-          throw new Error(result?.error || "SafeZone could not finish notification setup.");
+          throw new Error(result?.error || "Navora could not finish notification setup.");
         }
       }
       setAlertsReady(true);
@@ -382,7 +382,7 @@ export function OnboardingFlow() {
     <AuthGate>
     <main className="onboarding-screen">
       <nav className="onboarding-nav">
-        <a href="/" className="brand-lockup"><SafeZoneMark /><span>SafeZone</span></a>
+        <a href="/" className="brand-lockup"><NavoraMark /><span>Navora</span></a>
         <span>Family setup</span>
         <button type="button" className="onboarding-exit" onClick={() => window.location.assign("/")}>Exit</button>
       </nav>
@@ -400,14 +400,14 @@ export function OnboardingFlow() {
             {step === 3 && (paired ? "Finish your safety net" : "Connect the patient device")}
           </p>
           <h1>
-            {step === 1 && "Let’s make SafeZone feel like family."}
+            {step === 1 && "Let’s make Navora feel like family."}
             {step === 2 && "Where should home feel safe?"}
             {step === 3 && (paired ? "One final choice." : `Connect ${patientName}’s phone.`)}
           </h1>
           <p>
-            {step === 1 && "Names make alerts understandable in stressful moments. SafeZone uses them only inside your family experience."}
+            {step === 1 && "Names make alerts understandable in stressful moments. Navora uses them only inside your family experience."}
             {step === 2 && "We propose a boundary around your current location. You stay in control and can edit it anytime."}
-            {step === 3 && (paired ? "Choose whether SafeZone can send boundary alerts, then open your caregiver dashboard." : `Open the camera on ${patientName}’s phone and scan this one-time code. It expires automatically.`)}
+            {step === 3 && (paired ? "Choose whether Navora can send boundary alerts, then open your caregiver dashboard." : `Open the camera on ${patientName}’s phone and scan this one-time code. It expires automatically.`)}
           </p>
           <div className="onboarding-reassurance">
             <span>✓</span>
@@ -445,7 +445,7 @@ export function OnboardingFlow() {
           {step === 2 ? (
             <div className="zone-proposal">
               <div className="form-heading"><span>Home Zone</span><h2>Confirm the starting boundary</h2></div>
-              <p className="zone-location-guidance"><strong>Do this while you are at the home location.</strong> SafeZone uses this device’s current GPS position as the center of Home Zone.</p>
+              <p className="zone-location-guidance"><strong>Do this while you are at the home location.</strong> Navora uses this device’s current GPS position as the center of Home Zone.</p>
               <div className={`zone-visual ${location ? "located" : ""}`}>
                 <div className="zone-grid" aria-hidden="true" />
                 <span className="zone-radius" style={{ "--zone-scale": Math.min(1.4, radius / 120) } as CSSProperties} />
@@ -487,12 +487,12 @@ export function OnboardingFlow() {
                   <div className={`qr-frame ${pairingExpired ? "expired" : ""}`}>
                     {qrDataURL ? <img src={qrDataURL} alt="One-time QR code for pairing the patient device" /> : <div className="qr-loading">Creating secure code…</div>}
                   </div>
-                  <ol className="pair-instructions"><li>Open the camera on {patientName}’s phone</li><li>Point it at this code</li><li>Tap the SafeZone link and confirm</li></ol>
+                  <ol className="pair-instructions"><li>Open the camera on {patientName}’s phone</li><li>Point it at this code</li><li>Tap the Navora link and confirm</li></ol>
                   {pairingShortCode ? (
                     <div className="manual-code-callout">
                       <span>
                         Camera not working? On {patientName}’s phone open{" "}
-                        <strong>{pairingURL ? `${new URL(pairingURL).host}/patient` : "the SafeZone patient page"}</strong> and type this code:
+                        <strong>{pairingURL ? `${new URL(pairingURL).host}/patient` : "the Navora patient page"}</strong> and type this code:
                       </span>
                       <strong className="manual-code">{pairingShortCode.slice(0, 3)} {pairingShortCode.slice(3)}</strong>
                     </div>
@@ -518,17 +518,17 @@ export function OnboardingFlow() {
                   <div className="pair-success compact"><span>✓</span><div><strong>{patientName}’s phone is connected</strong><p>Location sharing begins after permission is allowed on that phone.</p></div></div>
                   <div className="form-heading"><span>Recommended</span><h2>Get alerts away from the dashboard</h2></div>
                   <div className="alert-preview">
-                    <span className="alert-app-icon"><SafeZoneMark /></span>
-                    <div><strong>SafeZone</strong><p>{patientName} may have left Home Zone.</p><small>now</small></div>
+                    <span className="alert-app-icon"><NavoraMark /></span>
+                    <div><strong>Navora</strong><p>{patientName} may have left Home Zone.</p><small>now</small></div>
                   </div>
                   <div className="alert-benefits">
-                    <p><span>✓</span><strong>Live dashboard warning</strong> while SafeZone is open</p>
+                    <p><span>✓</span><strong>Live dashboard warning</strong> while Navora is open</p>
                     <p><span>✓</span><strong>Background notification</strong> after a confirmed crossing</p>
                     <p><span>✓</span><strong>Shared response</strong> so family knows who is helping</p>
                   </div>
                   {!alertsReady ? <button type="button" className="onboarding-primary" onClick={enableAlerts} disabled={loading}>{loading ? "Enabling…" : "Enable notifications"}</button> : <div className="alerts-enabled"><span>✓</span><strong>Notifications are ready</strong></div>}
                   <button type="button" className="finish-link" onClick={finish}>{alertsReady ? "Open caregiver dashboard" : "Use dashboard without background alerts"} →</button>
-                  <p className="ios-onboarding-note"><strong>Using iPhone?</strong> Tap Share → Add to Home Screen, reopen SafeZone from its icon, then enable notifications. Without notifications, alerts appear only while the dashboard is open.</p>
+                  <p className="ios-onboarding-note"><strong>Using iPhone?</strong> Tap Share → Add to Home Screen, reopen Navora from its icon, then enable notifications. Without notifications, alerts appear only while the dashboard is open.</p>
                 </div>
               )}
             </div>
