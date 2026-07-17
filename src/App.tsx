@@ -981,6 +981,10 @@ function CaregiverView() {
   const historyLayerRef = useRef<L.LayerGroup | null>(null);
   const previousStateRef = useRef<GeofenceState>("unknown");
   const demoRunRef = useRef(0);
+  // Prevents clearLayers() while a zone handle is still mid-drag — Leaflet
+  // otherwise crashes with "Cannot read properties of undefined (reading 'baseVal')".
+  const zoneDragActiveRef = useRef(false);
+  const pendingZoneRenderRef = useRef(false);
   const [caregiverLabel, setCaregiverLabel] = useState(
     () => demoMode ? "Sarah" : window.localStorage.getItem("safezone-caregiver-label") || ""
   );
@@ -1342,6 +1346,11 @@ function CaregiverView() {
   }
 
   function renderZones() {
+    if (zoneDragActiveRef.current) {
+      pendingZoneRenderRef.current = true;
+      return;
+    }
+
     const layer = zonesLayerRef.current;
     if (!layer) {
       return;
@@ -1393,6 +1402,26 @@ function CaregiverView() {
         offset: [0, -14]
       });
 
+      const beginZoneDrag = () => {
+        zoneDragActiveRef.current = true;
+      };
+
+      const finishZoneDrag = (nextPoints: LatLngPoint[]) => {
+        // Let Leaflet finish removing drag CSS classes before we clear markers.
+        window.setTimeout(() => {
+          zoneDragActiveRef.current = false;
+          void commitZoneChange({ ...zone, points: nextPoints }).finally(() => {
+            if (pendingZoneRenderRef.current) {
+              pendingZoneRenderRef.current = false;
+              renderZones();
+            }
+          });
+        }, 0);
+      };
+
+      moveHandle.on("dragstart", beginZoneDrag);
+      resizeHandle.on("dragstart", beginZoneDrag);
+
       moveHandle.on("drag", () => {
         const position = moveHandle.getLatLng();
         livePoints = circleZonePoints({ lat: position.lat, lng: position.lng }, radius);
@@ -1402,7 +1431,7 @@ function CaregiverView() {
       });
 
       moveHandle.on("dragend", () => {
-        void commitZoneChange({ ...zone, points: livePoints });
+        finishZoneDrag(livePoints);
       });
 
       resizeHandle.on("drag", () => {
@@ -1428,7 +1457,7 @@ function CaregiverView() {
         livePoints = circleZonePoints({ lat: currentCenter.lat, lng: currentCenter.lng }, radius);
         const snapped = zoneRadiusHandlePosition({ lat: currentCenter.lat, lng: currentCenter.lng }, radius);
         resizeHandle.setLatLng([snapped.lat, snapped.lng]);
-        void commitZoneChange({ ...zone, points: livePoints });
+        finishZoneDrag(livePoints);
       });
     });
   }
