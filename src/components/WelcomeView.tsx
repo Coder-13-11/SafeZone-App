@@ -11,6 +11,37 @@ export function NavoraMark() {
   );
 }
 
+/**
+ * Adds `is-revealed` to sections as they enter the viewport so the CSS can
+ * stagger content in. Falls back to instantly-revealed when IntersectionObserver
+ * is unavailable or reduced motion is requested.
+ */
+function useReveal() {
+  useEffect(() => {
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced || !("IntersectionObserver" in window)) {
+      nodes.forEach((node) => node.classList.add("is-revealed"));
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-revealed");
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.18 }
+    );
+
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, []);
+}
+
 const heroMoments = [
   {
     state: "safe",
@@ -115,6 +146,7 @@ function PhoneHeroMockup() {
 
   return (
     <div className="phone-hero-stage" aria-label="Navora product preview">
+      <div className="phone-hero-glow" aria-hidden="true" />
       <div className={`phone-mockup phone-state-${current.state}`} ref={phoneRef}>
         <div className="phone-notch" aria-hidden="true" />
         <div className="phone-screen">
@@ -149,7 +181,7 @@ function PhoneHeroMockup() {
           ) : null}
         </div>
       </div>
-      <div className="phone-moment-dots" aria-hidden="true">
+      <div className="phone-moment-dots">
         {heroMoments.map((item, index) => (
           <button
             key={item.state}
@@ -164,92 +196,141 @@ function PhoneHeroMockup() {
   );
 }
 
+const escalationSteps = [
+  { label: "Safe", note: "Inside Home Zone — nothing to do." },
+  { label: "Near Boundary", note: "A gentle early heads-up." },
+  { label: "Confirming Exit", note: "Navora waits for a second reading." },
+  { label: "Needs Attention", note: "Family is notified, once." },
+  { label: "Family Responding", note: "One person owns the response." },
+  { label: "Resolved", note: "Everyone sees the calm ending." }
+] as const;
+
 export function WelcomeView() {
+  useReveal();
+
   return (
-    <main className="story-site">
-      <nav className="story-nav" aria-label="Navora">
-        <a href="/" className="brand-lockup"><NavoraMark /><span>Navora</span></a>
-        <div className="story-nav-links">
+    <main className="landing">
+      <nav className="landing-nav" aria-label="Navora">
+        <a href="/" className="brand-lockup">
+          <NavoraMark />
+          <span>Navora</span>
+        </a>
+        <div className="landing-nav-links">
           <a href="#how-it-works">How it works</a>
           <a href="#family">Family response</a>
           <a href="#questions">FAQ</a>
         </div>
-        <a href="/onboarding" className="story-nav-cta">Try Navora</a>
+        <a href="/onboarding" className="btn btn-nav">Try Navora</a>
       </nav>
 
-      <section className="landing-hero-simple">
-        <p className="landing-eyebrow">For families caring for a loved one with dementia</p>
-        <h1>Know they’re safe. Even when you’re not there.</h1>
+      <header className="landing-hero">
+        <p className="eyebrow">For families caring for a loved one with dementia</p>
+        <h1>
+          Know they’re safe.
+          <em>Even when you’re not there.</em>
+        </h1>
         <p className="landing-hero-sub">
-          Navora is a compassionate safety companion: real-time location, a gentle Home Zone boundary,
-          and calm alerts that tell your whole family who’s responding.
+          One calm sentence, a gentle Home Zone boundary, and alerts that tell your whole
+          family who’s responding — not just that something happened.
         </p>
-        <PhoneHeroMockup />
         <div className="landing-hero-cta">
-          <a href="/onboarding" className="primary-story-cta">Start setup <span>→</span></a>
-          <a href="#how-it-works" className="secondary-story-cta">See how it works</a>
+          <a href="/onboarding" className="btn btn-lg">
+            Start setup <span aria-hidden="true">→</span>
+          </a>
+          <a href="#how-it-works" className="btn-text">See how it works</a>
         </div>
-        <p className="landing-scroll-cue" aria-hidden="true">Scroll to see how it works</p>
-      </section>
+        <PhoneHeroMockup />
+      </header>
 
-      <section className="proof-ribbon" aria-label="Navora product principles">
-        <div><strong>At a glance</strong><span>one clear safety state</span></div>
+      <section className="proof-ribbon" aria-label="Navora product principles" data-reveal>
+        <div><strong>1 glance</strong><span>one clear safety state</span></div>
         <div><strong>2 phones</strong><span>no special hardware</span></div>
-        <div><strong>1 response</strong><span>who is handling it</span></div>
+        <div><strong>1 responder</strong><span>everyone knows who’s going</span></div>
         <div><strong>0 false precision</strong><span>GPS accuracy always shown</span></div>
       </section>
 
-      <section className="reassurance-scene" id="care-confidence">
+      <section className="scene scene-paper" id="care-confidence" data-reveal>
         <div className="scene-copy">
           <span className="scene-number">01</span>
-          <p className="story-kicker dark"><span /> Peace of mind first</p>
+          <p className="kicker">Peace of mind first</p>
           <h2>Confidence, not coordinates.</h2>
-          <p>Families shouldn’t decode GPS logs to answer one human question: are they okay?</p>
-          <ul>
-            <li><span>✓</span><div><strong>One sentence</strong><p>“Mary is inside Home Zone.”</p></div></li>
-            <li><span>✓</span><div><strong>One confidence score</strong><p>GPS, freshness, battery, and connection in plain language.</p></div></li>
-            <li><span>✓</span><div><strong>Honest accuracy</strong><p>Location is approximate — always visible on the map.</p></div></li>
+          <p className="scene-lede">
+            Families shouldn’t decode GPS logs to answer one human question: <em>are they okay?</em>
+          </p>
+          <ul className="scene-points">
+            <li>
+              <span aria-hidden="true">✓</span>
+              <div><strong>One sentence</strong><p>“Mary is inside Home Zone.” That’s the whole interface on a quiet day.</p></div>
+            </li>
+            <li>
+              <span aria-hidden="true">✓</span>
+              <div><strong>Plain-language signal</strong><p>GPS, freshness, battery, and connection — explained in words, not percentages.</p></div>
+            </li>
+            <li>
+              <span aria-hidden="true">✓</span>
+              <div><strong>Honest accuracy</strong><p>Location is approximate — the real radius is always drawn on the map.</p></div>
+            </li>
           </ul>
         </div>
-        <div className="confidence-art">
+        <div className="confidence-art" aria-hidden="true">
           <div className="confidence-halo halo-1" />
           <div className="confidence-halo halo-2" />
-          <div className="confidence-core"><span>97%</span><small>CONFIDENCE</small></div>
+          <div className="confidence-core"><span>Mary is home.</span><small>UPDATED JUST NOW</small></div>
           <div className="confidence-signal signal-fresh"><i />GPS<strong>Strong</strong></div>
           <div className="confidence-signal signal-clear"><i />Updated<strong>5 sec ago</strong></div>
           <div className="confidence-signal signal-device"><i />Battery<strong>84%</strong></div>
         </div>
       </section>
 
-      <section className="boundary-scene">
-        <div className="boundary-visual">
+      <section className="scene scene-deep" data-reveal>
+        <div className="boundary-visual" aria-hidden="true">
           <div className="boundary-map-grid" />
           <span className="boundary-ring ring-outer" />
           <span className="boundary-ring ring-inner" />
           <span className="boundary-house">⌂</span>
           <span className="boundary-person">M</span>
-          <div className="boundary-callout"><small>NEAR BOUNDARY</small><strong>Mary is approaching the edge</strong><p>No emergency alert yet.</p></div>
-        </div>
-        <div className="scene-copy light">
-          <span className="scene-number">02</span>
-          <p className="story-kicker"><span /> Thoughtful escalation</p>
-          <h2>Warning before panic.</h2>
-          <div className="escalation-ladder">
-            <span>Safe</span><span>↓</span><span>Near Boundary</span><span>↓</span><span>Confirming Exit</span><span>↓</span><span>Needs Attention</span><span>↓</span><span>Family Responding</span><span>↓</span><span>Resolved</span>
+          <div className="boundary-callout">
+            <small>NEAR BOUNDARY</small>
+            <strong>Mary is approaching the edge</strong>
+            <p>No emergency alert yet.</p>
           </div>
+        </div>
+        <div className="scene-copy">
+          <span className="scene-number">02</span>
+          <p className="kicker">Thoughtful escalation</p>
+          <h2>Warning before panic.</h2>
+          <p className="scene-lede">
+            Every state has a purpose, and every alert ends in a resolution — never an open loop.
+          </p>
+          <ol className="escalation-ladder">
+            {escalationSteps.map((step, index) => (
+              <li key={step.label} className={`ladder-step ladder-${index}`}>
+                <span className="ladder-dot" aria-hidden="true" />
+                <div><strong>{step.label}</strong><p>{step.note}</p></div>
+              </li>
+            ))}
+          </ol>
         </div>
       </section>
 
-      <section className="family-scene" id="family">
+      <section className="scene scene-paper" id="family" data-reveal>
         <div className="scene-copy">
           <span className="scene-number">03</span>
-          <p className="story-kicker dark"><span /> One care circle</p>
+          <p className="kicker">One care circle</p>
           <h2>One alert. One responder. Everyone aligned.</h2>
-          <p>Share one link in the family group chat — everyone joins the same care circle.</p>
-          <a href="/onboarding">Create your care circle <span>→</span></a>
+          <p className="scene-lede">
+            Share one link in the family group chat — everyone joins the same care circle and sees
+            the same truth, without a frantic message thread.
+          </p>
+          <a href="/onboarding" className="btn">
+            Create your care circle <span aria-hidden="true">→</span>
+          </a>
         </div>
-        <div className="family-response-art">
-          <div className="response-alert"><span>!</span><div><small>NAVORA ALERT</small><strong>Mary has left Home Zone</strong><p>2 minutes ago</p></div></div>
+        <div className="family-response-art" aria-hidden="true">
+          <div className="response-alert">
+            <span>!</span>
+            <div><small>NAVORA ALERT</small><strong>Mary has left Home Zone</strong><p>2 minutes ago</p></div>
+          </div>
           <div className="response-family">
             <div><span className="response-avatar sage">S</span><p><strong>Sarah</strong>I’m going</p><i className="active" /></div>
             <div><span className="response-avatar gold">M</span><p><strong>Mike</strong>I can’t</p><i /></div>
@@ -259,40 +340,69 @@ export function WelcomeView() {
         </div>
       </section>
 
-      <section className="how-scene" id="how-it-works">
-        <div className="story-section-heading compact">
-          <p className="story-kicker"><span /> Start in minutes</p>
+      <section className="how-scene" id="how-it-works" data-reveal>
+        <div className="scene-heading">
+          <p className="kicker">Start in minutes</p>
           <h2>Three steps. No maze.</h2>
         </div>
         <div className="how-steps">
-          <article><span>01</span><div className="how-icon">♡</div><h3>Add names</h3><p>So every alert is immediately human.</p></article>
-          <article><span>02</span><div className="how-icon">⌂</div><h3>Set Home Zone</h3><p>One boundary around where home feels safe.</p></article>
-          <article><span>03</span><div className="how-icon">⌁</div><h3>Scan & share</h3><p>Pair the patient phone, then share the family link.</p></article>
+          <article>
+            <span className="how-count">01</span>
+            <div className="how-icon" aria-hidden="true">♡</div>
+            <h3>Add names</h3>
+            <p>So every alert is immediately human — “Mary”, never “the device”.</p>
+          </article>
+          <article>
+            <span className="how-count">02</span>
+            <div className="how-icon" aria-hidden="true">⌂</div>
+            <h3>Set Home Zone</h3>
+            <p>One boundary around where home feels safe. Edit it anytime.</p>
+          </article>
+          <article>
+            <span className="how-count">03</span>
+            <div className="how-icon" aria-hidden="true">⌁</div>
+            <h3>Connect their phone</h3>
+            <p>Scan one secure QR code with the phone your loved one carries.</p>
+          </article>
         </div>
       </section>
 
-      <section className="questions-scene" id="questions">
-        <div className="story-section-heading compact">
-          <p className="story-kicker"><span /> Clear answers</p>
+      <section className="questions-scene" id="questions" data-reveal>
+        <div className="scene-heading">
+          <p className="kicker">Clear answers</p>
           <h2>Questions families ask first.</h2>
         </div>
         <div className="faq-list">
-          <details><summary>How accurate is Navora?</summary><p>Navora uses browser GPS. The real accuracy radius is always shown — often ±7 m outdoors, wider near buildings.</p></details>
-          <details><summary>Does the patient need a special tracker?</summary><p>No. A phone your family already owns, connected with one secure QR code.</p></details>
-          <details><summary>Can several family members watch together?</summary><p>Yes. Share one invite link. Everyone sees who is responding.</p></details>
+          <details>
+            <summary>How accurate is Navora?<span aria-hidden="true">+</span></summary>
+            <p>Navora uses browser GPS. The real accuracy radius is always shown — often ±7 m outdoors, wider near buildings.</p>
+          </details>
+          <details>
+            <summary>Does the patient need a special tracker?<span aria-hidden="true">+</span></summary>
+            <p>No. A phone your family already owns, connected with one secure QR code. Nothing for them to learn or configure.</p>
+          </details>
+          <details>
+            <summary>Can several family members watch together?<span aria-hidden="true">+</span></summary>
+            <p>Yes. Share one invite link. Everyone sees the same status — and who is responding when it matters.</p>
+          </details>
         </div>
       </section>
 
-      <section className="final-story-cta">
+      <section className="final-cta" data-reveal>
         <NavoraMark />
         <h2>Peace of mind before an emergency happens.</h2>
-        <a href="/onboarding">Try Navora <span>→</span></a>
+        <a href="/onboarding" className="btn btn-lg">
+          Try Navora <span aria-hidden="true">→</span>
+        </a>
       </section>
 
-      <footer className="story-footer">
+      <footer className="landing-footer">
         <div className="brand-lockup"><NavoraMark /><span>Navora</span></div>
         <p>Built with care for families navigating dementia.</p>
-        <div><a href="#questions">Safety & accuracy</a><a href="/onboarding">Get started</a></div>
+        <div className="landing-footer-links">
+          <a href="#questions">Safety &amp; accuracy</a>
+          <a href="/onboarding">Get started</a>
+        </div>
       </footer>
     </main>
   );

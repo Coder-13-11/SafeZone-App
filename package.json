@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently \"npm:server\" \"npm:client\"",
     "client": "vite --host 0.0.0.0",
-    "server": "node server/server.mjs",
+    "server": "PORT=4173 node server/server.mjs",
     "start": "NODE_ENV=production node server/server.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "npm run build && npm start",

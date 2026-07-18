@@ -53,10 +53,13 @@ export function CaregiverBootstrap({ children }: { children: ReactNode }) {
   if (!ready) {
     return (
       <main className="auth-screen">
-        <section className="auth-card">
-          <p className="eyebrow">Navora</p>
-          <h1>Loading your family setup</h1>
-          <p role="status">{message}</p>
+        <section className="auth-card auth-loading" aria-busy="true">
+          <span className="loading-ring" aria-hidden="true" />
+          <header className="auth-heading">
+            <p className="eyebrow">Navora</p>
+            <h1>Loading your family setup</h1>
+            <p className="auth-lede" role="status">{message}</p>
+          </header>
         </section>
       </main>
     );

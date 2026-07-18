@@ -828,7 +828,7 @@ function PatientView() {
     return (
       <main className="patient-activation">
         <a href="/" className="brand-lockup"><span className="brand-mark"><span /><span /><span /></span><span>Navora</span></a>
-        <section>
+        <section className="activation-card">
           <div className={`activation-symbol ${activationState}`} aria-hidden="true">
             {activationState === "checking" ? "…" : activationState === "error" ? "!" : "⌁"}
           </div>
@@ -836,13 +836,13 @@ function PatientView() {
           <h1>
             {activationState === "checking" ? "Connecting to your family…" : "Scan the caregiver’s pairing code"}
           </h1>
-          <p>{activationMessage}</p>
+          <p className="activation-message">{activationMessage}</p>
           {activationState !== "checking" ? (
-            <div className="activation-instructions">
-              <span>1</span><p>Ask the caregiver to open <strong>Care circle → Location phone</strong>.</p>
-              <span>2</span><p>Scan the one-time QR code with this phone’s camera.</p>
-              <span>3</span><p>Return here and allow location when asked.</p>
-            </div>
+            <ol className="activation-instructions">
+              <li><span aria-hidden="true">1</span><p>Ask the caregiver to open <strong>Family → Their phone</strong>.</p></li>
+              <li><span aria-hidden="true">2</span><p>Scan the one-time QR code with this phone’s camera.</p></li>
+              <li><span aria-hidden="true">3</span><p>Return here and allow location when asked.</p></li>
+            </ol>
           ) : null}
           {activationState !== "checking" && !patientLiveMode ? (
             <form className="manual-pair-form" onSubmit={claimWithManualCode}>
@@ -863,7 +863,7 @@ function PatientView() {
                   {claimingCode ? "Connecting…" : "Connect"}
                 </button>
               </div>
-              {codeError ? <p className="error" role="alert">{codeError}</p> : null}
+              {codeError ? <p className="callout callout-error" role="alert">{codeError}</p> : null}
             </form>
           ) : null}
         </section>
@@ -905,31 +905,41 @@ function PatientView() {
       <section className={`patient-card ${classForState(serverState)}`}>
         <header className="patient-device-header">
           <span className="brand-lockup"><span className="brand-mark"><span /><span /><span /></span><span>Navora</span></span>
-          <span>Navora phone</span>
+          <span className="patient-device-tag">Navora phone</span>
         </header>
         <div className={`patient-primary-state ${trackingState}`} role="status" aria-live="polite">
-          <span className="patient-state-symbol" aria-hidden="true">{patientPresentation.symbol}</span>
-          <p>{patientPresentation.eyebrow}</p>
+          <span className="patient-state-symbol" aria-hidden="true"><i>{patientPresentation.symbol}</i></span>
+          <p className="patient-state-eyebrow">{patientPresentation.eyebrow}</p>
           <h1>{patientPresentation.headline}</h1>
-          <strong>{patientPresentation.detail}</strong>
-          <span>{message}</span>
+          <p className="patient-state-detail">{patientPresentation.detail}</p>
+          <span className="patient-state-message">{message}</span>
         </div>
         {trackingState === "blocked" || trackingState === "error" ? (
           <button type="button" className="patient-retry" onClick={() => window.location.reload()}>
             Try location again
           </button>
         ) : null}
-        <div className="patient-care-notes">
-          <p>
-            <span>1</span><strong>Keep this page open</strong>
-            {wakeLockEngaged
-              ? "Navora is keeping this screen awake so tracking never pauses. Just leave the page open."
-              : "This browser page must remain open for continuous web location sharing."}
-          </p>
-          <p><span>2</span><strong>Add to Home Screen</strong>On iPhone, use Share → Add to Home Screen so Navora is easy to reopen.</p>
-          <p><span>3</span><strong>Keep the phone charged</strong>Leave the phone with {patientName || "the person being cared for"}.</p>
-          <p><span>4</span><strong>Family sees updates—not surveillance</strong>Navora shares reported location and accuracy with the connected care circle.</p>
-        </div>
+        <ul className="patient-care-notes">
+          <li>
+            <span aria-hidden="true">1</span>
+            <div>
+              <strong>Keep this page open</strong>
+              <p>
+                {wakeLockEngaged
+                  ? "Navora is keeping this screen awake so tracking never pauses. Just leave the page open."
+                  : "This browser page must remain open for continuous web location sharing."}
+              </p>
+            </div>
+          </li>
+          <li>
+            <span aria-hidden="true">2</span>
+            <div><strong>Add to Home Screen</strong><p>On iPhone, use Share → Add to Home Screen so Navora is easy to reopen.</p></div>
+          </li>
+          <li>
+            <span aria-hidden="true">3</span>
+            <div><strong>Keep the phone charged</strong><p>Leave the phone with {patientName || "the person being cared for"}.</p></div>
+          </li>
+        </ul>
         <details className="patient-device-details">
           <summary>Device and location details</summary>
           <div className="patient-grid">
@@ -953,7 +963,10 @@ function PatientView() {
               </strong>
             </div>
           </div>
-          <p>Phone GPS is not room-level positioning. The caregiver map shows the accuracy radius reported by this phone.</p>
+          <p>
+            Navora shares reported location and accuracy with the connected care circle only. Phone GPS is not
+            room-level positioning — the caregiver map shows the accuracy radius reported by this phone.
+          </p>
         </details>
       </section>
     </main>
@@ -1843,20 +1856,22 @@ function CaregiverView() {
       householdId={householdId}
     >
       {caregiverLiveMode ? (
-        <section className="demo-director" aria-label="Live tracker controls">
-          <div className="demo-director-copy">
-            <span className="demo-label"><i /> Live tracker</span>
+        <section className="live-tracker-strip" aria-label="Live tracker controls">
+          <div className="live-tracker-copy">
+            <span className="live-tracker-label"><i aria-hidden="true" /> Live tracker</span>
             <strong>Pair a phone or simulate a path to test Navora</strong>
           </div>
-          <button type="button" onClick={runGuidedDemo} disabled={demoRunning}>
-            {demoRunning ? "Simulating…" : "Simulate exit path"}
-          </button>
-          {livePairUrl ? (
-            <a href={livePairUrl} target="_blank" rel="noreferrer">
-              Open patient tracker link
-            </a>
-          ) : null}
-          <a href="/">Back home</a>
+          <div className="live-tracker-actions">
+            <button type="button" onClick={runGuidedDemo} disabled={demoRunning}>
+              {demoRunning ? "Simulating…" : "Simulate exit path"}
+            </button>
+            {livePairUrl ? (
+              <a className="btn-text" href={livePairUrl} target="_blank" rel="noreferrer">
+                Open patient tracker link
+              </a>
+            ) : null}
+            <a className="btn-text" href="/">Back home</a>
+          </div>
         </section>
       ) : null}
       {activeView !== "overview" && activeView !== "map" ? (
@@ -1868,13 +1883,13 @@ function CaregiverView() {
           <span className="persistent-state-symbol" aria-hidden="true">
             {presentedState === "safe" ? "✓" : presentedState === "alert" ? "!" : presentedState === "caution" ? "…" : presentedState === "grace" ? "?" : "–"}
           </span>
-          <div>
+          <div className="persistent-safety-copy">
             <small>{safetyCopy.eyebrow} · {freshnessLabel(livePing)}</small>
             <strong>{safetyCopy.headline}</strong>
             {isLocationStale && (currentState === "alert" || currentState === "grace") ? <p>Last known state remains urgent, but the location is no longer current.</p> : null}
           </div>
-          <a href={caregiverHref(undefined, false, householdId)}>
-            {presentedState === "alert" || presentedState === "grace" ? "View location" : presentedState === "unknown" ? "Resolve setup" : "Open overview"}
+          <a className="persistent-safety-link" href={caregiverHref(undefined, false, householdId)}>
+            {presentedState === "alert" || presentedState === "grace" ? "View location" : presentedState === "unknown" ? "Resolve setup" : "Open Home"}
           </a>
           {presentedState === "alert" ? (
             <AlertDecisionActions
@@ -1889,26 +1904,40 @@ function CaregiverView() {
       ) : null}
       {activeView === "activity" ? (
         <div className="dashboard-page activity-page">
-          <section className="dashboard-metrics">
-            <article><span className="metric-symbol safe">✓</span><div><small>Updates inside Home Zone</small><strong>{history.length ? `${safePercentage}%` : "—"}</strong><p>Share of recorded location updates—not time spent</p></div></article>
-            <article><span className="metric-symbol">↗</span><div><small>Meaningful transitions</small><strong>{boundaryEvents}</strong><p>Approaches or crossings</p></div></article>
-            <article><span className="metric-symbol">◷</span><div><small>Location updates</small><strong>{history.length}</strong><p>In this retained session</p></div></article>
+          <section className="metric-row" aria-label="Activity summary">
+            <article className="metric">
+              <small>Inside Home Zone</small>
+              <strong>{history.length ? `${safePercentage}%` : "—"}</strong>
+              <p>Share of recorded updates — not time spent</p>
+            </article>
+            <article className="metric">
+              <small>Meaningful transitions</small>
+              <strong>{boundaryEvents}</strong>
+              <p>Approaches or crossings</p>
+            </article>
+            <article className="metric">
+              <small>Location updates</small>
+              <strong>{history.length}</strong>
+              <p>In this retained session</p>
+            </article>
           </section>
           <div className="activity-layout">
             <HumanTimeline history={history} responseHistory={careHistory} />
-            <section className="dashboard-card insight-card">
-              <div className="dashboard-card-heading"><div><span>Pattern summary</span><h2>What Navora observed</h2></div></div>
-              <div className="insight-hero"><span>{safePercentage || "—"}{history.length ? "%" : ""}</span><p>of received updates were safely inside Home Zone.</p></div>
+            <section className="card insight-card">
+              <div className="card-head"><div><span>Pattern summary</span><h2>What Navora observed</h2></div></div>
+              <div className="insight-hero">
+                <span>{safePercentage || "—"}{history.length ? "%" : ""}</span>
+                <p>of received updates were safely inside Home Zone.</p>
+              </div>
               <div className="insight-row"><span>Boundary activity</span><strong>{boundaryEvents === 0 ? "No crossings recorded" : `${boundaryEvents} meaningful event${boundaryEvents === 1 ? "" : "s"}`}</strong></div>
               <div className="insight-row"><span>Latest signal</span><strong>{freshnessLabel(livePing)}</strong></div>
-              <p className="insight-note">Navora summarizes observed location states only. It does not predict wandering behavior.</p>
+              <p className="footnote">Navora summarizes observed location states only. It does not predict wandering behavior.</p>
             </section>
           </div>
         </div>
       ) : activeView === "family" ? (
         <div className="dashboard-page family-page">
           <div className="family-layout">
-            <PatientPairingCard householdId={householdId} patientName={patientName} initiallyPaired={Boolean(patientPairedAt)} />
             <FamilyCoordinationCard
               viewers={presence}
               currentCaregiver={caregiverLabel}
@@ -1919,47 +1948,57 @@ function CaregiverView() {
               demoMode={false}
               onCareAction={submitCareAction}
             />
+            <PatientPairingCard householdId={householdId} patientName={patientName} initiallyPaired={Boolean(patientPairedAt)} />
           </div>
-          <section className="dashboard-card family-explainer">
-            <span className="family-explainer-icon">◎</span>
-            <div><small>ONE SHARED TRUTH</small><h2>Everyone sees the same safety state.</h2><p>When something happens, Navora shows who is viewing and who has taken responsibility—without a frantic group-text thread.</p></div>
+          <section className="card family-explainer">
+            <span className="family-explainer-icon" aria-hidden="true">◎</span>
+            <div>
+              <small>One shared truth</small>
+              <h2>Everyone sees the same safety state.</h2>
+              <p>When something happens, Navora shows who is viewing and who has taken responsibility — without a frantic group-text thread.</p>
+            </div>
           </section>
         </div>
       ) : activeView === "settings" ? (
         <div className="dashboard-page settings-page">
-          <section className="dashboard-card settings-section">
-            <div className="dashboard-card-heading"><div><span>People</span><h2>Family profile</h2></div></div>
+          <section className="card settings-section">
+            <div className="card-head"><div><span>People</span><h2>Names</h2></div></div>
             <div className="settings-grid">
-              <label>
-                <span>Caregiver name</span>
+              <label className="field">
+                <span>Your name</span>
                 <input value={caregiverLabel} onChange={(event) => setCaregiverLabel(event.target.value)} required aria-invalid={!caregiverLabel.trim()} />
                 {!caregiverLabel.trim() ? <small className="field-error">Add your name so family responses are clear.</small> : null}
               </label>
-              <label>
+              <label className="field">
                 <span>Loved one’s name</span>
                 <input value={patientName} onChange={(event) => setPatientName(event.target.value)} required aria-invalid={!patientName.trim()} />
                 {!patientName.trim() ? <small className="field-error">Add a name for clear safety messages.</small> : null}
               </label>
             </div>
-            <div className="profile-save-row">
+            <div className="settings-save-row">
               <button type="button" onClick={saveFamilyProfile} disabled={!caregiverLabel.trim() || !patientName.trim()}>Save names</button>
               {profileStatus ? <span role="status">{profileStatus}</span> : null}
             </div>
           </section>
-          <section className="dashboard-card settings-section">
-            <div className="dashboard-card-heading"><div><span>Notifications</span><h2>Alert readiness</h2></div><span className={`device-status ${notificationReady ? "paired" : ""}`}><i />{notificationReady ? "Ready" : "Needs setup"}</span></div>
+          <section className="card settings-section">
+            <div className="card-head">
+              <div><span>Notifications</span><h2>Alert readiness</h2></div>
+              <span className={`device-status ${notificationReady ? "paired" : ""}`}><i aria-hidden="true" />{notificationReady ? "Ready" : "Needs setup"}</span>
+            </div>
             <p>See boundary warnings while the dashboard is open and receive a background notification after a confirmed crossing.</p>
-            <button type="button" onClick={subscribeToPush}>{notificationReady ? "Refresh notification setup" : "Enable notifications"}</button>
-            <p className="settings-footnote">On iPhone, install Navora to the Home Screen first for background Web Push.</p>
+            <button type="button" className={notificationReady ? "secondary" : ""} onClick={subscribeToPush}>
+              {notificationReady ? "Refresh notification setup" : "Enable notifications"}
+            </button>
+            <p className="footnote">On iPhone, install Navora to the Home Screen first for background Web Push.</p>
           </section>
-          <section className="dashboard-card settings-section">
-            <div className="dashboard-card-heading"><div><span>Calm alerts</span><h2>Repeat-alert cooldown</h2></div></div>
+          <section className="card settings-section">
+            <div className="card-head"><div><span>Calm alerts</span><h2>Repeat-alert cooldown</h2></div></div>
             <p>
               When {patientName || "your loved one"} walks near the boundary, the state can flip back and forth quickly.
-              The map and safety state always update instantly—this only calms repeated alarm vibrations so the family
+              The map and safety state always update instantly — this only calms repeated alarm vibrations so the family
               isn’t startled over and over.
             </p>
-            <label className="cooldown-control">
+            <label className="field cooldown-control">
               <span>Quiet window between repeated alarms</span>
               <select value={alertCooldownMin} onChange={(event) => updateAlertCooldown(Number(event.target.value))}>
                 <option value={0}>Off — every alert vibrates</option>
@@ -1971,14 +2010,11 @@ function CaregiverView() {
             </label>
           </section>
           {isLocationStale || connectionState === "offline" || !livePing ? (
-            <section className="dashboard-card settings-section reliability-recovery">
-              <div className="dashboard-card-heading">
-                <div>
-                  <span>Recovery</span>
-                  <h2>Patient phone guidance</h2>
-                </div>
+            <section className="card settings-section">
+              <div className="card-head">
+                <div><span>Recovery</span><h2>Patient phone guidance</h2></div>
                 <span className={`device-status ${isLocationStale ? "stale" : ""}`}>
-                  <i />
+                  <i aria-hidden="true" />
                   {isLocationStale ? "Stale" : connectionState === "offline" ? "Offline" : "Waiting"}
                 </span>
               </div>
@@ -1992,16 +2028,19 @@ function CaregiverView() {
                 <li>Confirm location permission is allowed for Navora in browser settings.</li>
                 <li>If pairing was lost, return to Family and scan a new one-time QR code.</li>
               </ol>
-              <p className="settings-footnote">The dashboard shows the last known location until a fresh ping arrives.</p>
+              <p className="footnote">The dashboard shows the last known location until a fresh ping arrives.</p>
             </section>
           ) : null}
-          <section className="dashboard-card settings-section honesty-setting">
-            <span>◉</span><div><h3>Honest location, always</h3><p>Navora displays the accuracy radius supplied by the patient phone and never claims indoor or room-level precision.</p></div>
+          <section className="card settings-section honesty-setting">
+            <span aria-hidden="true">◉</span>
+            <div>
+              <h3>Honest location, always</h3>
+              <p>Navora displays the accuracy radius supplied by the patient phone and never claims indoor or room-level precision.</p>
+            </div>
           </section>
         </div>
       ) : (
-      <section className={`caregiver-screen ${activeView === "map" ? "focus-map" : ""} ${classForState(currentState)} pulse-${visualPulse}`}>
-      <aside className="sidebar">
+      <section className={`home-page ${activeView === "map" ? "focus-map" : ""} ${classForState(currentState)} pulse-${visualPulse}`}>
         <SafetyHeroCard
           patientName={patientName}
           presentation={safetyCopy}
@@ -2019,164 +2058,165 @@ function CaregiverView() {
           onCareAction={submitCareAction}
         />
 
-        <TrustSignalsCard ping={livePing} connection={connectionState} connectionLabel={connectionLabel} />
-
-        <CareConfidenceCard
-          confidence={careConfidence}
-          expanded={confidenceExpanded}
-          onToggle={() => setConfidenceExpanded((expanded) => !expanded)}
-        />
-
-        <section className="readiness-card">
-          <div>
-            <span>Alerts</span>
-            <strong>{notificationReady ? "Notifications are on" : "Notifications need setup"}</strong>
-          </div>
-          <button type="button" className={notificationReady ? "secondary" : ""} onClick={subscribeToPush}>
-            {notificationReady ? "Manage" : "Enable alerts"}
-          </button>
-        </section>
-
-        {zones.length === 0 ? (
-          <section className="mode-card zone-empty-card">
-            <span className="mode-label">Home Zone</span>
-            <strong>Add Home Zone to the map</strong>
-            <p>One tap places a circle. Drag the house to move it, drag the round handle to resize.</p>
-            <button type="button" onClick={addHomeZone}>Add Home Zone</button>
-          </section>
-        ) : (
-          <section className="mode-card zone-manager">
-            <span className="mode-label">Home Zone</span>
-            <ul className="zone-list">
-              {zones.map((zone) => {
-                const radius = Math.round(zoneRadiusM(zone.points));
-                return (
-                  <li key={zone.id}>
-                    <span className="zone-swatch" style={{ background: zone.color }} aria-hidden="true" />
-                    <div>
-                      <strong>{zone.name}</strong>
-                      <label className="zone-radius-slider">
-                        <span>Size · {radius} m</span>
-                        <input
-                          type="range"
-                          min={50}
-                          max={400}
-                          step={10}
-                          value={Math.min(400, Math.max(50, radius))}
-                          onChange={(event) => void resizeZone(zone, Number(event.target.value))}
-                          aria-label={`Resize ${zone.name}`}
-                        />
-                      </label>
-                    </div>
-                    {confirmZoneDeleteId === zone.id ? (
-                      <span className="zone-delete-confirm">
-                        <button type="button" className="danger" onClick={() => removeZone(zone.id)}>Delete</button>
-                        <button type="button" className="ghost" onClick={() => setConfirmZoneDeleteId(null)}>Keep</button>
-                      </span>
-                    ) : (
-                      <button type="button" className="ghost" onClick={() => setConfirmZoneDeleteId(zone.id)}>
-                        Delete
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-            <p>On the map: drag ⌂ to move the whole circle, or drag ⇔ to resize. Or use the size slider above.</p>
-            <button type="button" className="secondary" onClick={addHomeZone}>Add another zone</button>
-          </section>
-        )}
-
         {otherViewers.length > 0 ? (
-          <p className="presence-badge">{otherViewers.map((viewer) => viewer.label).join(", ")} is also watching.</p>
-        ) : null}
-
-        <HumanTimeline history={history} responseHistory={careHistory} />
-        <FamilyCoordinationCard
-          viewers={presence}
-          currentCaregiver={caregiverLabel}
-          alertActive={currentState === "alert"}
-          response={careResponse}
-          declines={careDeclines}
-          householdId={householdId}
-          demoMode={false}
-          onCareAction={submitCareAction}
-        />
-
-        <section className="daily-actions">
-          <button type="button" onClick={addHomeZone}>
-            {zones.length === 0 ? "Add Home Zone" : "Add another zone"}
-          </button>
-          <button type="button" className="secondary" onClick={() => setTileMode(tileMode === "normal" ? "satellite" : "normal")}>
-            {tileMode === "normal" ? "Satellite map" : "Normal map"}
-          </button>
-        </section>
-
-        <details className="details-card">
-          <summary>System details</summary>
-          <div className="telemetry-grid">
-            <div>
-              <span>Boundary distance</span>
-              <strong>{metersLabel(livePing?.distanceToBoundaryM ?? null)}</strong>
-            </div>
-            {batterySupported && battery ? (
-              <div>
-                <span>This device</span>
-                <strong>{Math.round(battery.level * 100)}% battery</strong>
-              </div>
-            ) : null}
-            <div>
-              <span>Caregivers</span>
-              <strong>{presence.length} viewing</strong>
-            </div>
-          </div>
-          <p>{pushStatus}</p>
-          <p className="ios-note">
-            iOS Safari can receive background web push only after Navora is added to the Home Screen as a PWA.
+          <p className="presence-badge">
+            <span aria-hidden="true">●</span> {otherViewers.map((viewer) => viewer.label).join(", ")} is also watching.
           </p>
-          {livePing?.graceEndsAt ? <p>Grace period ends at {new Date(livePing.graceEndsAt).toLocaleTimeString()}.</p> : null}
-        </details>
-
-        {error ? <p className="error" role="alert">{error}</p> : null}
-      </aside>
-
-      <section className="map-shell">
-        <div className="map-toolbar">
-          <span>{zones.length === 0 ? "No Home Zone yet" : tileMode === "satellite" ? "Satellite" : "Street map"}</span>
-          <div className="map-toolbar-actions">
-            <button type="button" onClick={addHomeZone}>
-              {zones.length === 0 ? "Add Home Zone" : "Add zone"}
-            </button>
-            <button type="button" className="secondary" onClick={() => setTileMode(tileMode === "normal" ? "satellite" : "normal")}>
-              {tileMode === "normal" ? "Satellite" : "Street"}
-            </button>
-          </div>
-        </div>
-        {zones.length === 0 ? (
-          <div className="map-empty-hint">
-            <strong>Add Home Zone</strong>
-            <span>One tap places a circle you can drag and resize — no drawing needed.</span>
-          </div>
         ) : null}
-        <div ref={mapElementRef} className="map" />
-        <div className="timeline">
-          <div>
-            <strong>Movement history</strong>
-            <span>{history.length === 0 ? "Waiting for location history" : `${history.length} recent updates`}</span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={Math.max(0, history.length - 1)}
-            value={replayIndex ?? Math.max(0, history.length - 1)}
-            disabled={history.length === 0}
-            onChange={(event) => setReplayIndex(Number(event.target.value))}
-          />
-          <button type="button" className="ghost" onClick={() => setReplayIndex(null)}>
-            Live
-          </button>
+        {error ? <p className="callout callout-error" role="alert">{error}</p> : null}
+
+        <div className="home-grid">
+          <section className="map-panel">
+            <div className="map-toolbar">
+              <span className="map-toolbar-label">
+                {zones.length === 0 ? "No Home Zone yet" : tileMode === "satellite" ? "Satellite" : "Street map"}
+              </span>
+              <div className="map-toolbar-actions">
+                <button type="button" onClick={addHomeZone}>
+                  {zones.length === 0 ? "Add Home Zone" : "Add zone"}
+                </button>
+                <button type="button" className="secondary" onClick={() => setTileMode(tileMode === "normal" ? "satellite" : "normal")}>
+                  {tileMode === "normal" ? "Satellite" : "Street"}
+                </button>
+              </div>
+            </div>
+            <div className="map-stage">
+              {zones.length === 0 ? (
+                <div className="map-empty-hint">
+                  <strong>Add Home Zone</strong>
+                  <span>One tap places a circle you can drag and resize — no drawing needed.</span>
+                </div>
+              ) : null}
+              <div ref={mapElementRef} className="map" />
+            </div>
+            <div className="map-history-bar">
+              <div>
+                <strong>Movement history</strong>
+                <span>{history.length === 0 ? "Waiting for location history" : `${history.length} recent updates`}</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={Math.max(0, history.length - 1)}
+                value={replayIndex ?? Math.max(0, history.length - 1)}
+                disabled={history.length === 0}
+                onChange={(event) => setReplayIndex(Number(event.target.value))}
+                aria-label="Scrub movement history"
+              />
+              <button type="button" className="ghost" onClick={() => setReplayIndex(null)}>
+                Live
+              </button>
+            </div>
+          </section>
+
+          <aside className="home-side">
+            {zones.length === 0 ? (
+              <section className="card zone-card zone-empty-card">
+                <div className="card-head"><div><span>Home Zone</span><h2>Add Home Zone to the map</h2></div></div>
+                <p>One tap places a circle. Drag the house to move it, drag the round handle to resize.</p>
+                <button type="button" onClick={addHomeZone}>Add Home Zone</button>
+              </section>
+            ) : (
+              <section className="card zone-card zone-manager">
+                <div className="card-head"><div><span>Home Zone</span><h2>Boundary</h2></div></div>
+                <ul className="zone-list">
+                  {zones.map((zone) => {
+                    const radius = Math.round(zoneRadiusM(zone.points));
+                    return (
+                      <li key={zone.id}>
+                        <span className="zone-swatch" style={{ background: zone.color }} aria-hidden="true" />
+                        <div>
+                          <strong>{zone.name}</strong>
+                          <label className="zone-radius-slider">
+                            <span>Size · {radius} m</span>
+                            <input
+                              type="range"
+                              min={50}
+                              max={400}
+                              step={10}
+                              value={Math.min(400, Math.max(50, radius))}
+                              onChange={(event) => void resizeZone(zone, Number(event.target.value))}
+                              aria-label={`Resize ${zone.name}`}
+                            />
+                          </label>
+                        </div>
+                        {confirmZoneDeleteId === zone.id ? (
+                          <span className="zone-delete-confirm">
+                            <button type="button" className="danger" onClick={() => removeZone(zone.id)}>Delete</button>
+                            <button type="button" className="ghost" onClick={() => setConfirmZoneDeleteId(null)}>Keep</button>
+                          </span>
+                        ) : (
+                          <button type="button" className="ghost" onClick={() => setConfirmZoneDeleteId(zone.id)}>
+                            Delete
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="footnote">On the map: drag ⌂ to move the whole circle, or drag ⇔ to resize.</p>
+                <button type="button" className="secondary" onClick={addHomeZone}>Add another zone</button>
+              </section>
+            )}
+
+            <section className="card readiness-card">
+              <div>
+                <span>Alerts</span>
+                <strong>{notificationReady ? "Notifications are on" : "Notifications need setup"}</strong>
+              </div>
+              <button type="button" className={notificationReady ? "secondary" : ""} onClick={subscribeToPush}>
+                {notificationReady ? "Manage" : "Enable alerts"}
+              </button>
+            </section>
+
+            <TrustSignalsCard ping={livePing} connection={connectionState} connectionLabel={connectionLabel} />
+
+            <CareConfidenceCard
+              confidence={careConfidence}
+              expanded={confidenceExpanded}
+              onToggle={() => setConfidenceExpanded((expanded) => !expanded)}
+            />
+
+            <details className="card details-card">
+              <summary>System details</summary>
+              <div className="telemetry-grid">
+                <div>
+                  <span>Boundary distance</span>
+                  <strong>{metersLabel(livePing?.distanceToBoundaryM ?? null)}</strong>
+                </div>
+                {batterySupported && battery ? (
+                  <div>
+                    <span>This device</span>
+                    <strong>{Math.round(battery.level * 100)}% battery</strong>
+                  </div>
+                ) : null}
+                <div>
+                  <span>Caregivers</span>
+                  <strong>{presence.length} viewing</strong>
+                </div>
+              </div>
+              <p>{pushStatus}</p>
+              <p className="footnote">
+                iOS Safari can receive background web push only after Navora is added to the Home Screen as a PWA.
+              </p>
+              {livePing?.graceEndsAt ? <p className="footnote">Grace period ends at {new Date(livePing.graceEndsAt).toLocaleTimeString()}.</p> : null}
+            </details>
+          </aside>
         </div>
-      </section>
+
+        <div className="home-lower">
+          <HumanTimeline history={history} responseHistory={careHistory} />
+          <FamilyCoordinationCard
+            viewers={presence}
+            currentCaregiver={caregiverLabel}
+            alertActive={currentState === "alert"}
+            response={careResponse}
+            declines={careDeclines}
+            householdId={householdId}
+            demoMode={false}
+            onCareAction={submitCareAction}
+          />
+        </div>
       </section>
       )}
     </DashboardShell>

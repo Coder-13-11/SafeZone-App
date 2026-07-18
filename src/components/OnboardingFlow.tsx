@@ -68,6 +68,12 @@ function circlePoints(center: ProposedLocation, radiusM: number): LatLngPoint[] 
   });
 }
 
+const stepMeta = [
+  { number: 1, label: "Names" },
+  { number: 2, label: "Home Zone" },
+  { number: 3, label: "Their phone" }
+] as const;
+
 export function OnboardingFlow() {
   const [initialDraft] = useState(readOnboardingDraft);
   const [step, setStep] = useState(initialDraft?.step || 1);
@@ -378,166 +384,242 @@ export function OnboardingFlow() {
     window.location.assign(`/caregiver?household=${household.id}`);
   }
 
-    return (
+  const stepTitle =
+    step === 1
+      ? "Let’s make Navora feel like family."
+      : step === 2
+        ? "Where should home feel safe?"
+        : paired
+          ? "One final choice."
+          : `Connect ${patientName || "their"}’s phone.`;
+
+  const stepLede =
+    step === 1
+      ? "Names make alerts understandable in stressful moments. Navora uses them only inside your family experience."
+      : step === 2
+        ? "Navora proposes a boundary around your current location. You stay in control and can edit it anytime."
+        : paired
+          ? "Choose whether Navora can send boundary alerts, then open your caregiver dashboard."
+          : `Open the camera on ${patientName || "their"}’s phone and scan this one-time code. It expires automatically.`;
+
+  return (
     <AuthGate>
-    <main className="onboarding-screen">
-      <nav className="onboarding-nav">
-        <a href="/" className="brand-lockup"><NavoraMark /><span>Navora</span></a>
-        <span>Family setup</span>
-        <button type="button" className="onboarding-exit" onClick={() => window.location.assign("/")}>Exit</button>
-      </nav>
+      <main className="onboarding-screen">
+        <nav className="onboarding-nav">
+          <a href="/" className="brand-lockup"><NavoraMark /><span>Navora</span></a>
+          <button type="button" className="btn-text" onClick={() => window.location.assign("/")}>Exit setup</button>
+        </nav>
 
-      <div className="onboarding-progress" aria-label={`Step ${step} of 3`}>
-        <span style={{ width: progress }} />
-      </div>
+        <div className="onboarding-column">
+          <ol className="onboarding-stepper" aria-label={`Step ${step} of 3`}>
+            {stepMeta.map((item) => (
+              <li
+                key={item.number}
+                className={step === item.number ? "is-current" : step > item.number ? "is-done" : ""}
+                aria-current={step === item.number ? "step" : undefined}
+              >
+                <span className="stepper-dot">{step > item.number ? "✓" : item.number}</span>
+                <span className="stepper-label">{item.label}</span>
+              </li>
+            ))}
+            <span className="stepper-track" aria-hidden="true"><i style={{ width: progress }} /></span>
+          </ol>
 
-      <section className="onboarding-layout">
-        <aside className="onboarding-story">
-          <span className="step-count">0{step} / 03</span>
-          <p className="eyebrow">
-            {step === 1 && "Meet your care circle"}
-            {step === 2 && "Create a place of safety"}
-            {step === 3 && (paired ? "Finish your safety net" : "Connect the patient device")}
-          </p>
-          <h1>
-            {step === 1 && "Let’s make Navora feel like family."}
-            {step === 2 && "Where should home feel safe?"}
-            {step === 3 && (paired ? "One final choice." : `Connect ${patientName}’s phone.`)}
-          </h1>
-          <p>
-            {step === 1 && "Names make alerts understandable in stressful moments. Navora uses them only inside your family experience."}
-            {step === 2 && "We propose a boundary around your current location. You stay in control and can edit it anytime."}
-            {step === 3 && (paired ? "Choose whether Navora can send boundary alerts, then open your caregiver dashboard." : `Open the camera on ${patientName}’s phone and scan this one-time code. It expires automatically.`)}
-          </p>
-          <div className="onboarding-reassurance">
-            <span>✓</span>
-            <p>
-              <strong>
-                {step === 1 && "Simple by design"}
-                {step === 2 && "No false precision"}
-                {step === 3 && (paired ? "You control notifications" : "One-time secure pairing")}
-              </strong>
-              {step === 1 && "Three short steps. No technical setup."}
-              {step === 2 && "The real GPS accuracy remains visible."}
-              {step === 3 && (paired ? "Change alert preferences whenever you need." : "The QR contains a short-lived token, not a permanent password.")}
-            </p>
-          </div>
-        </aside>
+          <header className="onboarding-heading" key={`heading-${step}-${paired}`}>
+            <h1>{stepTitle}</h1>
+            <p>{stepLede}</p>
+          </header>
 
-        <div className="onboarding-card">
-          {step === 1 ? (
-            <div className="onboarding-form">
-              <div className="form-heading"><span>People</span><h2>Who are we caring for?</h2></div>
-              <label><span>Your name</span><input value={caregiverName} onChange={(event) => setCaregiverName(event.target.value)} placeholder="Sarah" autoFocus /></label>
-              <label><span>Loved one’s name</span><input value={patientName} onChange={(event) => setPatientName(event.target.value)} placeholder="Mary" /></label>
-              <label>
-                <span>Your relationship</span>
-                <select value={relationship} onChange={(event) => setRelationship(event.target.value)}>
-                  <option>Family member</option><option>Spouse or partner</option><option>Professional caregiver</option><option>Friend</option>
-                </select>
-              </label>
-              <button type="button" className="onboarding-primary" onClick={createFamily} disabled={loading}>
-                {loading ? "Creating your family…" : "Continue"} <span>→</span>
-              </button>
-            </div>
-          ) : null}
-
-          {step === 2 ? (
-            <div className="zone-proposal">
-              <div className="form-heading"><span>Home Zone</span><h2>Confirm the starting boundary</h2></div>
-              <p className="zone-location-guidance"><strong>Do this while you are at the home location.</strong> Navora uses this device’s current GPS position as the center of Home Zone.</p>
-              <div className={`zone-visual ${location ? "located" : ""}`}>
-                <div className="zone-grid" aria-hidden="true" />
-                <span className="zone-radius" style={{ "--zone-scale": Math.min(1.4, radius / 120) } as CSSProperties} />
-                <span className="zone-home">⌂</span>
-                {loading ? <p>Finding this device…</p> : null}
-                {!location && !loading ? <button type="button" onClick={proposeHomeLocation}>Try location again</button> : null}
+          <section className="onboarding-card" key={`card-${step}`}>
+            {step === 1 ? (
+              <div className="onboarding-form">
+                <label className="field">
+                  <span>Your name</span>
+                  <input value={caregiverName} onChange={(event) => setCaregiverName(event.target.value)} placeholder="Sarah" autoFocus />
+                </label>
+                <label className="field">
+                  <span>Loved one’s name</span>
+                  <input value={patientName} onChange={(event) => setPatientName(event.target.value)} placeholder="Mary" />
+                </label>
+                <label className="field">
+                  <span>Your relationship</span>
+                  <select value={relationship} onChange={(event) => setRelationship(event.target.value)}>
+                    <option>Family member</option>
+                    <option>Spouse or partner</option>
+                    <option>Professional caregiver</option>
+                    <option>Friend</option>
+                  </select>
+                </label>
+                <button type="button" className="btn-step-primary" onClick={createFamily} disabled={loading}>
+                  {loading ? "Creating your family…" : "Continue"} <span aria-hidden="true">→</span>
+                </button>
               </div>
-              {location ? (
-                <>
-                  <div className="location-confirmation">
-                    <span>✓</span>
-                    <div><strong>Current location found</strong><small>GPS reports an accuracy radius of about {Math.round(location.accuracy)} m</small></div>
-                  </div>
-                  <label className="radius-control">
-                    <span><strong>Boundary size</strong><b>{radius} m</b></span>
-                    <input type="range" min="50" max="300" step="10" value={radius} onChange={(event) => setRadius(Number(event.target.value))} />
-                  </label>
-                </>
-              ) : null}
-              <button type="button" className="onboarding-primary" onClick={saveHomeZone} disabled={loading}>
-                {location ? "Use this Home Zone" : "Continue without a boundary"} <span>→</span>
-              </button>
-              <button type="button" className="onboarding-back" onClick={() => { setError(null); setStep(1); }}>← Edit names</button>
-              {!location ? <p className="boundary-warning">Boundary alerts remain off until you create Home Zone from the caregiver map.</p> : null}
-            </div>
-          ) : null}
+            ) : null}
 
-          {step === 3 ? (
-            <div className="pairing-step">
-              {!paired ? (
-                <>
-                  <div className="form-heading"><span>Location phone</span><h2>Scan with {patientName}’s phone</h2></div>
-                  {pairingURL && !pairingURL.startsWith("https://") ? (
-                    <p className="pairing-host-warning" role="alert">
-                      <strong>Two-phone pairing needs a deployed HTTPS address.</strong>
-                      This local link will not provide reliable location access on another phone. Set PUBLIC_URL to your HTTPS app address, then create a new code.
-                    </p>
+            {step === 2 ? (
+              <div className="onboarding-form">
+                <p className="zone-guidance">
+                  <strong>Do this while you are at the home location.</strong> Navora uses this device’s
+                  current GPS position as the center of Home Zone.
+                </p>
+                <div className={`zone-visual ${location ? "located" : ""}`}>
+                  <div className="zone-grid" aria-hidden="true" />
+                  <span className="zone-radius" style={{ "--zone-scale": Math.min(1.4, radius / 120) } as CSSProperties} />
+                  <span className="zone-home" aria-hidden="true">⌂</span>
+                  {loading ? <p>Finding this device…</p> : null}
+                  {!location && !loading ? (
+                    <button type="button" className="secondary" onClick={proposeHomeLocation}>Try location again</button>
                   ) : null}
-                  <div className={`qr-frame ${pairingExpired ? "expired" : ""}`}>
-                    {qrDataURL ? <img src={qrDataURL} alt="One-time QR code for pairing the patient device" /> : <div className="qr-loading">Creating secure code…</div>}
-                  </div>
-                  <ol className="pair-instructions"><li>Open the camera on {patientName}’s phone</li><li>Point it at this code</li><li>Tap the Navora link and confirm</li></ol>
-                  {pairingShortCode ? (
-                    <div className="manual-code-callout">
-                      <span>
-                        Camera not working? On {patientName}’s phone open{" "}
-                        <strong>{pairingURL ? `${new URL(pairingURL).host}/patient` : "the Navora patient page"}</strong> and type this code:
-                      </span>
-                      <strong className="manual-code">{pairingShortCode.slice(0, 3)} {pairingShortCode.slice(3)}</strong>
-                    </div>
-                  ) : null}
-                  <div className="pair-actions">
-                    <button type="button" className="secondary" onClick={async () => { await navigator.clipboard.writeText(pairingURL); setCopied(true); }}>{copied ? "Link copied" : "Copy pairing link"}</button>
-                    <button type="button" className={pairingExpired ? "" : "secondary"} onClick={() => { setCopied(false); createPairing(household!.id); }}>{pairingExpired ? "Create a fresh code" : "Create a new code"}</button>
-                  </div>
-                  <button type="button" className="onboarding-primary" onClick={finish}>
-                    Go to caregiver dashboard <span>→</span>
-                  </button>
-                  <a className="finish-link" href="/live">
-                    Or open live tracker (works without pairing) →
-                  </a>
-                  <p className="ios-onboarding-note">Skip pairing for now and open the dashboard. You can connect {patientName}’s phone later from Family.</p>
-                  <button type="button" className="onboarding-back" onClick={() => { setError(null); setStep(2); }}>← Edit Home Zone</button>
-                  <small className={`expiry-note ${pairingExpired ? "expired" : ""}`}>
-                    {pairingExpired ? "This code has expired. Create a fresh code to continue." : `Code expires at ${pairingExpiresAt ? new Date(pairingExpiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "—"}`}
-                  </small>
-                </>
-              ) : (
-                <div className="paired-final-step">
-                  <div className="pair-success compact"><span>✓</span><div><strong>{patientName}’s phone is connected</strong><p>Location sharing begins after permission is allowed on that phone.</p></div></div>
-                  <div className="form-heading"><span>Recommended</span><h2>Get alerts away from the dashboard</h2></div>
-                  <div className="alert-preview">
-                    <span className="alert-app-icon"><NavoraMark /></span>
-                    <div><strong>Navora</strong><p>{patientName} may have left Home Zone.</p><small>now</small></div>
-                  </div>
-                  <div className="alert-benefits">
-                    <p><span>✓</span><strong>Live dashboard warning</strong> while Navora is open</p>
-                    <p><span>✓</span><strong>Background notification</strong> after a confirmed crossing</p>
-                    <p><span>✓</span><strong>Shared response</strong> so family knows who is helping</p>
-                  </div>
-                  {!alertsReady ? <button type="button" className="onboarding-primary" onClick={enableAlerts} disabled={loading}>{loading ? "Enabling…" : "Enable notifications"}</button> : <div className="alerts-enabled"><span>✓</span><strong>Notifications are ready</strong></div>}
-                  <button type="button" className="finish-link" onClick={finish}>{alertsReady ? "Open caregiver dashboard" : "Use dashboard without background alerts"} →</button>
-                  <p className="ios-onboarding-note"><strong>Using iPhone?</strong> Tap Share → Add to Home Screen, reopen Navora from its icon, then enable notifications. Without notifications, alerts appear only while the dashboard is open.</p>
                 </div>
-              )}
-            </div>
-          ) : null}
+                {location ? (
+                  <>
+                    <div className="inline-confirmation">
+                      <span aria-hidden="true">✓</span>
+                      <div>
+                        <strong>Current location found</strong>
+                        <small>GPS reports an accuracy radius of about {Math.round(location.accuracy)} m</small>
+                      </div>
+                    </div>
+                    <label className="radius-control">
+                      <span><strong>Boundary size</strong><b>{radius} m</b></span>
+                      <input type="range" min="50" max="300" step="10" value={radius} onChange={(event) => setRadius(Number(event.target.value))} />
+                    </label>
+                  </>
+                ) : null}
+                <button type="button" className="btn-step-primary" onClick={saveHomeZone} disabled={loading}>
+                  {location ? "Use this Home Zone" : "Continue without a boundary"} <span aria-hidden="true">→</span>
+                </button>
+                {!location ? (
+                  <p className="onboarding-footnote">Boundary alerts remain off until you create Home Zone from the caregiver map.</p>
+                ) : null}
+                <button type="button" className="btn-text onboarding-back" onClick={() => { setError(null); setStep(1); }}>
+                  ← Edit names
+                </button>
+              </div>
+            ) : null}
 
-          {error ? <p className="onboarding-error" role="alert">{error}</p> : null}
+            {step === 3 && !paired ? (
+              <div className="onboarding-form pairing-step">
+                {pairingURL && !pairingURL.startsWith("https://") ? (
+                  <p className="callout callout-warning" role="alert">
+                    <strong>Two-phone pairing needs a deployed HTTPS address.</strong>
+                    This local link will not provide reliable location access on another phone.
+                    Set PUBLIC_URL to your HTTPS app address, then create a new code.
+                  </p>
+                ) : null}
+                <div className="pairing-layout">
+                  <div className={`qr-frame ${pairingExpired ? "expired" : ""}`}>
+                    {qrDataURL ? (
+                      <img src={qrDataURL} alt="One-time QR code for pairing the patient device" />
+                    ) : (
+                      <div className="qr-loading">Creating secure code…</div>
+                    )}
+                  </div>
+                  <div className="pairing-side">
+                    <ol className="pair-instructions">
+                      <li>Open the camera on {patientName || "their"}’s phone</li>
+                      <li>Point it at this code</li>
+                      <li>Tap the Navora link and confirm</li>
+                    </ol>
+                    {pairingShortCode ? (
+                      <div className="manual-code-callout">
+                        <span>
+                          Camera not working? On {patientName || "their"}’s phone open{" "}
+                          <strong>{pairingURL ? `${new URL(pairingURL).host}/patient` : "the Navora patient page"}</strong>{" "}
+                          and type this code:
+                        </span>
+                        <strong className="manual-code">{pairingShortCode.slice(0, 3)} {pairingShortCode.slice(3)}</strong>
+                      </div>
+                    ) : null}
+                    <div className="pair-actions">
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={async () => { await navigator.clipboard.writeText(pairingURL); setCopied(true); }}
+                      >
+                        {copied ? "Link copied" : "Copy pairing link"}
+                      </button>
+                      <button
+                        type="button"
+                        className={pairingExpired ? "" : "secondary"}
+                        onClick={() => { setCopied(false); createPairing(household!.id); }}
+                      >
+                        {pairingExpired ? "Create a fresh code" : "Create a new code"}
+                      </button>
+                    </div>
+                    <small className={`expiry-note ${pairingExpired ? "expired" : ""}`}>
+                      {pairingExpired
+                        ? "This code has expired. Create a fresh code to continue."
+                        : `Code expires at ${pairingExpiresAt ? new Date(pairingExpiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "—"}`}
+                    </small>
+                  </div>
+                </div>
+                <button type="button" className="btn-step-primary" onClick={finish}>
+                  Go to caregiver dashboard <span aria-hidden="true">→</span>
+                </button>
+                <p className="onboarding-footnote">
+                  You can skip pairing for now and connect {patientName || "their"}’s phone later from Family.{" "}
+                  <a href="/live">Or open the live tracker →</a>
+                </p>
+                <button type="button" className="btn-text onboarding-back" onClick={() => { setError(null); setStep(2); }}>
+                  ← Edit Home Zone
+                </button>
+              </div>
+            ) : null}
+
+            {step === 3 && paired ? (
+              <div className="onboarding-form paired-final-step">
+                <div className="inline-confirmation success">
+                  <span aria-hidden="true">✓</span>
+                  <div>
+                    <strong>{patientName}’s phone is connected</strong>
+                    <small>Location sharing begins after permission is allowed on that phone.</small>
+                  </div>
+                </div>
+                <div className="alert-preview" aria-hidden="true">
+                  <span className="alert-app-icon"><NavoraMark /></span>
+                  <div>
+                    <strong>Navora</strong>
+                    <p>{patientName} may have left Home Zone.</p>
+                    <small>now</small>
+                  </div>
+                </div>
+                <ul className="alert-benefits">
+                  <li><span aria-hidden="true">✓</span><p><strong>Live dashboard warning</strong> while Navora is open</p></li>
+                  <li><span aria-hidden="true">✓</span><p><strong>Background notification</strong> after a confirmed crossing</p></li>
+                  <li><span aria-hidden="true">✓</span><p><strong>Shared response</strong> so family knows who is helping</p></li>
+                </ul>
+                {!alertsReady ? (
+                  <button type="button" className="btn-step-primary" onClick={enableAlerts} disabled={loading}>
+                    {loading ? "Enabling…" : "Enable notifications"}
+                  </button>
+                ) : (
+                  <div className="inline-confirmation success">
+                    <span aria-hidden="true">✓</span>
+                    <div><strong>Notifications are ready</strong></div>
+                  </div>
+                )}
+                <button type="button" className="btn-text" onClick={finish}>
+                  {alertsReady ? "Open caregiver dashboard" : "Use dashboard without background alerts"} →
+                </button>
+                <p className="onboarding-footnote">
+                  <strong>Using iPhone?</strong> Tap Share → Add to Home Screen, reopen Navora from its icon,
+                  then enable notifications. Without them, alerts appear only while the dashboard is open.
+                </p>
+              </div>
+            ) : null}
+
+            {error ? <p className="callout callout-error" role="alert">{error}</p> : null}
+          </section>
+
+          <p className="onboarding-reassurance">
+            <span aria-hidden="true">✓</span>
+            {step === 1 && "Three short steps. No technical setup."}
+            {step === 2 && "No false precision — the real GPS accuracy stays visible."}
+            {step === 3 && (paired ? "You can change alert preferences whenever you need." : "The QR contains a short-lived token, not a permanent password.")}
+          </p>
         </div>
-      </section>
-    </main>
+      </main>
     </AuthGate>
   );
 }

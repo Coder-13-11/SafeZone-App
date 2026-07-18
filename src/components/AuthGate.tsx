@@ -69,17 +69,23 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   return (
     <main className="auth-screen">
-      <section className="auth-card">
-        <NavoraMark />
-        <p className="eyebrow">Caregiver sign in</p>
-        <h1>{loading ? "Checking your session…" : "Keep your family setup safe."}</h1>
-        <p>
-          Sign in once so Navora can restore your household, names, Home Zone, alerts, and pairing codes on every
-          device.
-        </p>
+      <section className="auth-card" aria-busy={loading}>
+        <a href="/" className="brand-lockup">
+          <NavoraMark />
+          <span>Navora</span>
+        </a>
+        <header className="auth-heading">
+          <p className="eyebrow">Caregiver sign in</p>
+          <h1>{loading ? "Checking your session…" : sent ? "Enter your code." : "Keep your family setup safe."}</h1>
+          <p className="auth-lede">
+            {sent
+              ? `We emailed a 6-digit code to ${email.trim()}.`
+              : "Sign in once so Navora can restore your names, Home Zone, alerts, and pairing on every device."}
+          </p>
+        </header>
         {!loading ? (
           <form onSubmit={sent ? verifyCode : sendCode}>
-            <label>
+            <label className="field">
               <span>Email address</span>
               <input
                 type="email"
@@ -92,7 +98,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
               />
             </label>
             {sent ? (
-              <label>
+              <label className="field">
                 <span>6-digit code from email</span>
                 <input
                   type="text"
@@ -103,6 +109,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                   onChange={(event) => setCode(event.target.value.replace(/\s/g, ""))}
                   placeholder="123456"
                   autoComplete="one-time-code"
+                  className="code-input"
                   required
                 />
               </label>
@@ -116,34 +123,32 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                   ? "Sending…"
                   : "Email me a secure sign-in code"}
             </button>
-            {sent ? (
-              <button
-                type="button"
-                className="auth-secondary"
-                disabled={sending || skipping}
-                onClick={() => {
-                  setSent(false);
-                  setCode("");
-                  setStatus("");
-                }}
-              >
-                Use a different email
+            <div className="auth-alt-actions">
+              {sent ? (
+                <button
+                  type="button"
+                  className="btn-text"
+                  disabled={sending || skipping}
+                  onClick={() => {
+                    setSent(false);
+                    setCode("");
+                    setStatus("");
+                  }}
+                >
+                  Use a different email
+                </button>
+              ) : null}
+              <button type="button" className="btn-text" disabled={sending || verifying || skipping} onClick={skipEmail}>
+                {skipping ? "Starting…" : "Continue without email"}
               </button>
-            ) : null}
-            <button type="button" className="auth-secondary" disabled={sending || verifying || skipping} onClick={skipEmail}>
-              {skipping ? "Starting…" : "Continue without email"}
-            </button>
+            </div>
           </form>
         ) : null}
         {authError ? (
-          <p className="auth-status" role="alert">
-            {authError}
-          </p>
+          <p className="auth-status is-error" role="alert">{authError}</p>
         ) : null}
         {status ? (
-          <p className="auth-status" role="status">
-            {status}
-          </p>
+          <p className="auth-status" role="status">{status}</p>
         ) : null}
       </section>
     </main>

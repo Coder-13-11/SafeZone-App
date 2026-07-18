@@ -82,16 +82,30 @@ export function PatientPairingCard({
   }
 
   return (
-    <section className="dashboard-card patient-pair-card">
-      <div className="dashboard-card-heading">
-        <div><span>Location phone</span><h2>{paired ? `${patientName} is connected` : `Connect ${patientName}’s phone`}</h2></div>
-        <span className={`device-status ${paired ? "paired" : ""}`}><i />{paired ? "Connected" : "Not paired"}</span>
+    <section className="card patient-pair-card">
+      <div className="card-head">
+        <div>
+          <span>Their phone</span>
+          <h2>{paired ? `${patientName} is connected` : `Connect ${patientName}’s phone`}</h2>
+        </div>
+        <span className={`device-status ${paired ? "paired" : ""}`}>
+          <i aria-hidden="true" />
+          {paired ? "Connected" : "Not paired"}
+        </span>
       </div>
 
       {paired && !qrDataURL ? (
         <div className="paired-device-summary">
-          <span className="paired-phone" aria-hidden="true">▯</span>
-          <div><strong>{patientName}’s phone is paired</strong><p>The current phone remains connected unless a replacement code is claimed.</p></div>
+          <span className="paired-phone" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <rect x="7" y="3" width="10" height="18" rx="2.4" />
+              <path d="M11 17.6h2" />
+            </svg>
+          </span>
+          <div>
+            <strong>{patientName}’s phone is paired</strong>
+            <p>The current phone remains connected unless a replacement code is claimed.</p>
+          </div>
           {!confirmReplacement ? (
             <button type="button" className="secondary" onClick={() => setConfirmReplacement(true)}>Replace phone</button>
           ) : (
@@ -99,7 +113,9 @@ export function PatientPairingCard({
               <strong>Are you setting up a different phone?</strong>
               <p>The current phone will keep working until the new phone finishes pairing.</p>
               <div>
-                <button type="button" onClick={createCode} disabled={loading}>{loading ? "Creating…" : "Create replacement code"}</button>
+                <button type="button" onClick={createCode} disabled={loading}>
+                  {loading ? "Creating…" : "Create replacement code"}
+                </button>
                 <button type="button" className="secondary" onClick={() => setConfirmReplacement(false)}>Cancel</button>
               </div>
             </div>
@@ -107,17 +123,22 @@ export function PatientPairingCard({
         </div>
       ) : qrDataURL ? (
         <div className="dashboard-pairing">
-          <img src={qrDataURL} alt="One-time QR code to connect the patient device" />
-          <div>
-            <span className="pair-step-label">SCAN WITH THE PATIENT PHONE</span>
+          <div className="qr-frame">
+            <img src={qrDataURL} alt="One-time QR code to connect the patient device" />
+          </div>
+          <div className="pairing-side">
             <h3>One scan. No password.</h3>
             {pairingURL && !pairingURL.startsWith("https://") ? (
-              <p className="pairing-host-warning" role="alert">
+              <p className="callout callout-warning" role="alert">
                 <strong>Deploy Navora with HTTPS before using this code on another phone.</strong>
                 Configure PUBLIC_URL with the shared HTTPS address, then generate a new code.
               </p>
             ) : null}
-            <ol><li>Open the phone camera</li><li>Scan this QR code</li><li>Allow location on the Navora page</li></ol>
+            <ol className="pair-instructions">
+              <li>Open the phone camera</li>
+              <li>Scan this QR code</li>
+              <li>Allow location on the Navora page</li>
+            </ol>
             {shortCode ? (
               <div className="manual-code-callout">
                 <span>
@@ -128,20 +149,30 @@ export function PatientPairingCard({
               </div>
             ) : null}
             <div className="pair-actions">
-              <button type="button" className="secondary" onClick={async () => { await navigator.clipboard.writeText(pairingURL); setCopied(true); }}>{copied ? "Link copied" : "Copy link"}</button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={async () => { await navigator.clipboard.writeText(pairingURL); setCopied(true); }}
+              >
+                {copied ? "Link copied" : "Copy link"}
+              </button>
             </div>
-            <small>Expires {new Date(expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</small>
+            <small className="expiry-note">
+              Expires {new Date(expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+            </small>
           </div>
         </div>
       ) : (
         <div className="pair-empty">
           <div className="pair-illustration" aria-hidden="true"><span>▯</span><i>⌁</i><span>▯</span></div>
           <p>Create a private, one-time QR code. Scan it using the phone {patientName} will carry.</p>
-          <button type="button" onClick={createCode} disabled={loading}>{loading ? "Creating code…" : "Create pairing code"}</button>
+          <button type="button" onClick={createCode} disabled={loading}>
+            {loading ? "Creating code…" : "Create pairing code"}
+          </button>
         </div>
       )}
 
-      {error ? <p className="error" role="alert">{error}</p> : null}
+      {error ? <p className="callout callout-error" role="alert">{error}</p> : null}
     </section>
   );
 }
